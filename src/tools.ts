@@ -16,7 +16,10 @@ import {
   statsInput,
   planInput
 } from "./lib/inputs";
-export function createTools(agent: ChatAgent) {
+export function createTools(
+  agent: ChatAgent,
+  policy: { batchConfirmed?: boolean; allowTaskCreation?: boolean } = {}
+) {
   let planningStats: CompletionStats | undefined;
   const foundIds = new Set<string>();
   const requireLookup = (id: string) =>
@@ -42,13 +45,27 @@ export function createTools(agent: ChatAgent) {
       description:
         "Add a task with an optional offset datetime, priority, kind, owner and estimate in minutes. Use only code-provided duration conversions.",
       inputSchema: addInput,
-      execute: async (input) => agent.addTask(input)
+      execute: async (input) =>
+        policy.allowTaskCreation === false
+          ? {
+              ok: false,
+              error:
+                "Task creation is not authorized in this reminder or preview turn."
+            }
+          : agent.addTask(input)
     }),
     addTasksBatch: tool({
       description:
         "Create exactly the brain-dump candidates explicitly confirmed by the user, at most 30. Never call before confirmation. Inserts sequentially with source braindump; reports created tasks and partial failures. Retry only failed items, never successful ones.",
       inputSchema: batchInput,
-      execute: async (input) => agent.addTasksBatch(input)
+      execute: async (input) =>
+        policy.batchConfirmed
+          ? agent.addTasksBatch(input)
+          : {
+              ok: false,
+              error:
+                "Show candidates and wait for explicit user confirmation before creating a batch."
+            }
     }),
     updateTask: tool({
       description:

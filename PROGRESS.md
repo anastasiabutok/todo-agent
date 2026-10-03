@@ -8,3 +8,5 @@
 - Phase 5-lite — done: confirmed brain-dump batch flow, sequential source=braindump inserts (max 30), partial failures; statistics-only tool restriction; typecheck and 62 existing tests pass, no new tests or browser verification.
 - Phase 6-lite — done: README with architecture, local/deploy instructions and hostname-based Access; friction log consolidated; typecheck and 62 tests pass; no auth code or deployment.
 - Phase 7 — cut: AI Gateway belongs under README next steps.
+
+- Production fixes — implemented: numeric/null repair, confirmation and reminder guards, quota error display; 69 tests and full local check pass; task creation live-verified, remaining model flows blocked by exhausted Free inference quota; redeployment still required.

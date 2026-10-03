@@ -56,3 +56,31 @@ it("requires completion statistics before planning in every turn", async () => {
   await tools.proposeDayPlan.execute!({ date: "2026-11-03" }, options);
   expect(propose).toHaveBeenCalledExactlyOnceWith("2026-11-03", stats);
 });
+
+it("blocks batch writes before confirmation even if a model calls the tool", async () => {
+  const add = vi.fn(() => ({ ok: true }));
+  const agent = { addTasksBatch: add } as unknown as ChatAgent;
+  const input = { tasks: [{ title: "proposal" }] };
+  const options = { toolCallId: "batch", messages: [] };
+  expect(
+    await createTools(agent).addTasksBatch.execute!(input, options)
+  ).toMatchObject({ ok: false });
+  expect(add).not.toHaveBeenCalled();
+  await createTools(agent, { batchConfirmed: true }).addTasksBatch.execute!(
+    input,
+    options
+  );
+  expect(add).toHaveBeenCalledExactlyOnceWith(input);
+});
+it("prevents implicit task creation during a reminder request", async () => {
+  const add = vi.fn();
+  const agent = { addTask: add } as unknown as ChatAgent;
+  const tools = createTools(agent, { allowTaskCreation: false });
+  expect(
+    await tools.addTask.execute!(
+      { title: "not found" },
+      { toolCallId: "reminder", messages: [] }
+    )
+  ).toMatchObject({ ok: false });
+  expect(add).not.toHaveBeenCalled();
+});

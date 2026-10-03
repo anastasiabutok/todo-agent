@@ -363,7 +363,8 @@ function Chat() {
     clearHistory,
     addToolApprovalResponse,
     stop,
-    status
+    status,
+    error: chatError
   } = useAgentChat({
     agent,
     experimental_throttle: 100
@@ -694,6 +695,11 @@ function Chat() {
         connected={connected}
         onDismiss={(ids) => agent.stub.markNotificationsRead(ids)}
       />
+      {chatError && (
+        <p role="alert" className="text-kumo-danger text-sm px-4 py-2">
+          {chatError.message}
+        </p>
+      )}
       {timezoneError && (
         <p role="alert" className="text-kumo-danger text-sm px-4">
           {timezoneError}

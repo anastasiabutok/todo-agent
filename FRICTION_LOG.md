@@ -252,3 +252,30 @@ Consolidated observations from Phases 0–6-lite. Related incidents are merged b
 - Time lost: ~2 min
 - Workaround: Format SPEC.md; keep its scope unchanged. Pin CI to Node 24, use npm ci and run npm test alongside npm run check. Local formatting, lint, typecheck and all 62 tests pass. The first clean CI install then exposed a missing @emnapi/runtime@1.11.3 transitive lock entry; added its exact registry version, integrity and tslib dependency without changing direct dependencies.
 - Suggested fix (docs / API / error message): Align phase completion checks with all repository CI gates.
+
+## Production validation retries and premature brain-dump calls
+
+- Product: Workers AI | AI SDK
+- Expected: The public demo creates tasks and plans without repeated invalid tool calls; brain dumps wait for confirmation.
+- Actual: Production history confirmed priority:"1", est_minutes:"30", days:"30", and a premature addTasksBatch with owner:null. A reminder lookup found no proposal and the model then tried inventing a new task's details. Completion worked. Current GitHub Sanity Check and Semgrep were green; the user's failure email referred to an older run.
+- Time lost: ~6 min
+- Workaround: AI SDK repair hook converts only digit strings in known numeric fields and removes optional nulls on task creation, then reruns strict schema validation. Batch execution requires an explicit confirmation turn; preview disables tools, and reminder turns prohibit implicit task creation. Added SDK-level and guard regression tests. Local task creation passed without an error card. Final preview, confirmed insertion and reminder flows remain live-unverified because quota was exhausted.
+- Suggested fix (docs / API / error message): Repair representation-only model mistakes before tool execution; enforce conversational action boundaries in code.
+
+## Empty activeTools fails Workers AI validation
+
+- Product: Workers AI | AI SDK
+- Expected: activeTools:[] with toolChoice:none permits a text-only preview.
+- Actual: Provider sent tools:[] and Workers AI rejected it with error 8007: tools must not be an empty array. A previous preview with the broad conversation context printed function syntax as text instead of candidates, without writing tasks.
+- Time lost: ~2 min
+- Workaround: Removed the empty activeTools list; keep toolChoice:none with a focused preview system and latest-message-only context. Final live rerun blocked by daily quota.
+- Suggested fix (docs / API / error message): Omit empty tools arrays and document provider compatibility for text-only steps.
+
+## Shared local and production inference exhausted the daily Free allowance
+
+- Product: Workers AI
+- Expected: Finish live regression checks after fixing production validation failures.
+- Actual: Local inference returned error 4006: daily free allocation of 10,000 neurons exhausted. Local remote bindings and the public demo use the same account allowance. Further live checks stopped.
+- Time lost: ~1 min
+- Workaround: Remain on the user's Free plan; await available quota. Add a sanitized stream error explaining quota exhaustion and render chat errors visibly. Formatting, lint, typecheck and 69 tests pass; this does not establish final live model behavior.
+- Suggested fix (docs / API / error message): Show account quota errors in the chat instead of a blank answer; make allowance usage visible during demo development.

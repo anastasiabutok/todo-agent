@@ -87,3 +87,9 @@ Environment: Node v24.13.0; npm 11.6.2.
 - After a successful proposeDayPlan, prepareStep supplies a focused plan-only system prompt and toolChoice:"none". Planner output includes code-computed remaining local buckets; final narration must keep exact minute counts and distinguish passed preferred buckets from availability today.
 
 - Final live planner response was verified against persisted chat JSON: morning deep-work preference, current evening availability, explicit underestimation warning, task durations 180/30 minutes and total 210 minutes, with no conversion to hours. Temporary numeric stream diagnostic removed. Temporary .dev.vars file removed after verification; seed fixture rows and idempotence marker remain local.
+
+## Production regression repair APIs
+
+- Installed AI SDK experimental_repairToolCall receives { toolCall, tools, inputSchema, error, messages, system } and returns a replacement LanguageModelV3ToolCall or null. toolCall.input is JSON text; repaired input is validated again before execute. Verified with the installed MockLanguageModelV3 and a real generateText invocation, without inference.
+- prepareStep may override messages as well as system/toolChoice. Workers AI rejects an empty tools array when activeTools:[] is used; retain toolChoice:none without an empty activeTools override.
+- toUIMessageStreamResponse({ onError: (error:unknown) => string }) supplies sanitized client-visible stream errors; useAgentChat exposes error for the UI alert.

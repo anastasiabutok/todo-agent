@@ -2,6 +2,10 @@
 
 A single-user todo assistant for adding, editing, completing, delegating and postponing tasks through chat. It persists reminders and notifications, shows a live task panel, and proposes daily plans from completion history and corrected estimates. Brain dumps become tasks only after conversational confirmation.
 
+## Public application demo
+
+The current deployment is intentionally public for a Cloudflare application. All visitors share the default task list and chat instance, and inference uses the same Free allowance as local remote development. Use fictional demo data. Access instructions below are an optional private-deployment alternative; they have not been applied to the public demo.
+
 ## Demo
 
 _Demo GIF placeholder: record task creation → reminder → daily plan → confirmed brain dump._
@@ -10,7 +14,7 @@ _Demo GIF placeholder: record task creation → reminder → daily plan → conf
 
 ```mermaid
 flowchart TD
-  Browser[React chat and task panel] --> Access[Cloudflare Access: hostname policy]
+  Browser[React chat and task panel] --> Access[Optional Cloudflare Access: hostname policy]
   Access --> Worker[Worker static assets and agent routing]
   Worker <-->|WebSocket state and chat| Agent[ChatAgent: AIChatAgent Durable Object]
   Agent --> SQL[(Built-in SQLite: tasks, reminders, notifications)]
@@ -32,8 +36,8 @@ The UI reads the agent state rather than maintaining another task store. SQLite 
 - **Cold-start threshold:** fewer than 10 completed tasks means no pattern claims. Per-kind median estimate ratios require at least five estimate/actual pairs; corrections are clamped to 0.5–3.0. Unknown estimates stay unknown.
 - **Honest planning windows:** local-hour history describes preferences; code supplies remaining windows so the model can distinguish a passed morning from today's availability. Plans do not mutate tasks or deadlines.
 - **Persisted reminders:** notification rows survive a closed browser. Completing or dropping a task cancels pending reminders with persisted guards. Native browser notifications are optional; in-app banners work independently.
-- **Confirm brain dumps:** show numbered candidates with owners and deadlines, ask one focused clarification, then insert only confirmed items. Batches contain 1–30 tasks, inserted sequentially with `source='braindump'`; partial failures are returned. No duplicate detection or batch transaction is included. Confirmation is enforced by the prompt, not a server approval mechanism.
-- **Dashboard-managed protection:** this reduced version relies entirely on Cloudflare Access. There is no application JWT validation or `auth.ts`.
+- **Confirm brain dumps:** show numbered candidates with owners and deadlines, ask one focused clarification, then insert only confirmed items. Batches contain 1–30 tasks, inserted sequentially with `source='braindump'`; partial failures are returned. No duplicate detection or batch transaction is included. Candidate extraction and item selection use the prompt. A turn guard disables preview tools and blocks batch execution without a recognized explicit confirmation after a candidate offer; this is not a persisted approval system.
+- **Dashboard-managed protection:** private deployment relies on Cloudflare Access; the current public demo has no authentication. There is no application JWT validation or `auth.ts`.
 
 ## Run locally
 
@@ -77,7 +81,7 @@ The seed adds 40 completed examples and two labeled open tasks. An idempotence m
 
 ### Checks and sample conversations
 
-`npx tsc --noEmit` and `npm test` are the reduced spec's completion checks. There are 62 existing tests; no new brain-dump tests were added as requested. Earlier live checks covered core mutations, persisted reminders, mobile layout, low-history planning and seeded planning. Phase 5's conversational confirmation and statistics-only restriction have not been rechecked against the live model.
+`npx tsc --noEmit` and `npm test` are the reduced spec's completion checks. There are now 69 tests, including regression coverage added after production failures. Earlier live checks covered core mutations, persisted reminders, mobile layout, low-history planning and seeded planning. After production validation errors, local task creation passed without an error card. Final preview/confirmation, reminder and planning regressions remain live-unverified because the account exhausted its daily Free allowance.
 
 Three manual messages for the final smoke check:
 
@@ -115,12 +119,13 @@ The app has no origin JWT check; an uncovered hostname exposes its agent routes.
 
 ## Known limitations
 
-- The model sometimes sends numeric fields as strings, causing a validation error and retry; the UI may show a generic tool error. Strict validation prevents those invalid writes.
+- The model sometimes sends numeric strings or optional nulls. A narrow repair hook normalizes known representation errors before strict validation. Other malformed calls can still fail; historical error cards remain in chat.
 - Recognized English statistics-only requests restrict tool availability to completion stats. Other wording may still confuse model intent.
 - A stream adapter removes duplicated native/OpenAI text and tool representations; regression coverage includes numeric mirrors and UTF-8.
 - Opaque local internal errors and browser reload stalls occurred; their root causes remain unknown. Successful data checks do not establish that these are resolved.
 - The original install reported 24 dependency audit findings (including high/critical); dependency paths have not been triaged. There is no claim of a completed security audit.
-- Native OS notification delivery, deployed Access and production behavior have not been verified. Full observations and workarounds are in [FRICTION_LOG.md](FRICTION_LOG.md).
+- Daily Free AI quota is currently exhausted; further inference must wait for available quota. Chat now displays a quota-specific error.
+- Native OS notification delivery, deployed Access and final production fixes have not been verified. Full observations and workarounds are in [FRICTION_LOG.md](FRICTION_LOG.md).
 
 ## What I'd build next
 
