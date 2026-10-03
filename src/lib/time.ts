@@ -79,3 +79,10 @@ export function endOfLocalDay(ms: number, timezone: string): number {
     .slice(0, 10);
   return startOfLocalDate(nextDate, timezone) - 1;
 }
+export function formatLocalDateTime(ms: number, timezone: string): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: timezone,
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(ms);
+}

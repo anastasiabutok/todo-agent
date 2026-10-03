@@ -188,3 +188,48 @@
 - Time lost: ~0 min
 - Workaround: Verified acceptance through visible tool outputs, read-only SQLite and synced WebSocket state. Recorded as an open issue rather than guessing the cause.
 - Suggested fix (docs / API / error message): Include request path and an actionable local stack trace for internal failures.
+
+## Typed useAgent overload needs both generics
+
+- Product: Agents SDK
+- Expected: useAgent<ChatAgent> exposes typed agent state and callable stubs.
+- Actual: Installed overloads also accept a single state generic; useAgent<ChatAgent, AgentState> is needed to keep this app's state and methods typed together.
+- Time lost: ~1 min
+- Workaround: Read installed react.d.ts and supply both generics; render agent.state directly.
+- Suggested fix (docs / API / error message): Include a typed agent-and-state example and make overload selection easier to identify.
+
+## Callable union exposes a nested promise type
+
+- Product: Agents SDK
+- Expected: completeTaskFromUi returns the resolved result of completeTask through the typed stub.
+- Actual: A non-async wrapper returning either an immediate validation error or a Promise produces a stub type with a nested Promise union; TypeScript rejected the TaskPanel handler.
+- Time lost: ~1 min
+- Workaround: Make completeTaskFromUi async so every return path resolves to one flattened result type.
+- Suggested fix (docs / API / error message): Use Awaited in stub result mapping or document that callable wrappers should be async.
+
+## Reminder request needs one numeric-schema retry
+
+- Product: Workers AI
+- Expected: “Remind me about. reminderdelivery check in 2 minutes and about cancellation check in 2 minutes.” performs lookups and schedules both using code-computed ISO datetimes.
+- Actual: Initial listTasks input used limit:"1" and failed numeric schema validation; model corrected it and then looked up both tasks and scheduled both for the same exact code-computed datetime. No incorrect reminder was created.
+- Time lost: ~1 min
+- Workaround: Retain strict schemas and the six-step limit; record the recovered retry. Both schedule results were verified before closing the browser.
+- Suggested fix (docs / API / error message): Improve numeric schema adherence and expose precise validation errors instead of generic UI errors.
+
+## Native typing changes the reminder test phrase
+
+- Product: Tooling (browser automation)
+- Expected: Native typing enters “Remind me about reminder delivery check in 2 minutes and about cancellation check in 2 minutes.” verbatim.
+- Actual: Persisted user message was “Remind me about. reminderdelivery check in 2 minutes and about cancellation check in 2 minutes.” The model still matched the intended tasks and used the exact code-computed datetime.
+- Time lost: ~0 min
+- Workaround: Use paste for subsequent multiword native test input; verify persisted text when recording model behavior.
+- Suggested fix (docs / API / error message): Make typeText deterministic with OS text replacement, or recommend paste for exact test phrases.
+
+## Date schedules truncate milliseconds
+
+- Product: Agents SDK
+- Expected: schedule(new Date(ms)) preserves the millisecond timestamp stored in reminders.
+- Actual: Installed scheduler uses Math.floor(when.getTime()/1000). First live reminder fired about 265 ms before its stored millisecond deadline.
+- Time lost: ~1 min
+- Workaround: A tested pure helper rounds scheduled instants up to the next second while retaining the original requested remind_at in SQLite. Delivery is at most one second later and never early due to truncation.
+- Suggested fix (docs / API / error message): Document second-level schedule resolution or round future deadlines up instead of down.

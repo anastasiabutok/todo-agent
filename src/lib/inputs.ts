@@ -40,3 +40,9 @@ export const timezoneInput = z.object({ timezone: z.string().min(1) });
 export type AddInput = z.infer<typeof addInput>;
 export type UpdateInput = z.infer<typeof updateInput>;
 export type ListInput = z.infer<typeof listInput>;
+export const reminderInput = z.object({
+  task_id: z.string().min(1),
+  remind_at: datetime
+});
+export const cancelReminderInput = z.object({ reminder_id: z.string().min(1) });
+export const notificationIdsInput = z.array(z.string().min(1)).max(100);

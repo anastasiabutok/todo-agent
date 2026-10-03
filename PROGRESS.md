@@ -27,7 +27,12 @@
 
 ## Phase 3 — Reminders + notifications + UI panel
 
-- Status: not started
+- Status: done
+- Built: setReminder/cancelReminder tools and public fireReminder callback with persisted guards and atomic notification/fired updates. UI callables for completion, browser timezone initialization and notification dismissal. TaskPanel reads useAgent state directly; NotificationBanner shows persisted unread reminders and offers opt-in browser notifications. Desktop side panel and mobile tabs preserve Kumo/Tailwind. Relative reminder instants and second-resolution scheduling are computed in tested pure functions.
+- Verification: TypeScript, lint and formatting pass; npm test passes 40 tests. Local dev starts without errors. Chat created two test tasks; panel updated live. Chat scheduled both in two minutes for 2026-11-03T19:07:23.282+01:00. Completed cancellation check via checkbox before due time; it disappeared immediately, and SQLite confirmed status done, cancelled=1. Closed browser tab before due time, reopened after more than three minutes, and saw exactly one persisted banner for reminder delivery check. SQLite confirms delivery fired=1 and one notification; cancellation fired=0 and no notification. Dismiss removed banner and persisted read_at. At 390x844, Chat and Tasks tabs both have document scrollWidth=clientWidth=390. Saved desktop/mobile screenshots in parent outputs. Browser notification permission was left unchanged; native OS notification delivery was not manually exercised.
+- Friction: Five entries: useAgent overload, callable Promise union, recovered model string-limit retry, native typing alteration, and SDK second-resolution scheduling. Known model schema retries, audit findings and background browser automation stalls remain documented.
+- Git: Staged secret review, phase commit and push finalize this phase. No deployment or dashboard changes.
+- Next: Phase 4 — Planner (wait for user continuation).
 
 ## Phase 4 — Planner
 

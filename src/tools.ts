@@ -8,7 +8,9 @@ import {
   completeInput,
   actualInput,
   dropInput,
-  timezoneInput
+  timezoneInput,
+  reminderInput,
+  cancelReminderInput
 } from "./lib/inputs";
 export function createTools(agent: ChatAgent) {
   const foundIds = new Set<string>();
@@ -67,6 +69,19 @@ export function createTools(agent: ChatAgent) {
       description: "Reopen a done or dropped task.",
       inputSchema: idInput,
       execute: async ({ id }) => requireLookup(id) ?? agent.reopenTask(id)
+    }),
+    setReminder: tool({
+      description:
+        "Set a reminder for an open task. Call listTasks first. For relative times use the code-computed reminder datetime from the system prompt; never calculate it yourself.",
+      inputSchema: reminderInput,
+      execute: async ({ task_id, remind_at }) =>
+        requireLookup(task_id) ?? agent.setReminder(task_id, remind_at)
+    }),
+    cancelReminder: tool({
+      description:
+        "Cancel a reminder by its reminder_id returned by setReminder.",
+      inputSchema: cancelReminderInput,
+      execute: async ({ reminder_id }) => agent.cancelReminder(reminder_id)
     }),
     setTimezone: tool({
       description: "Set the user's IANA timezone, for example Europe/Prague.",

@@ -1,3 +1,16 @@
+import {
+  reminderAction,
+  reminderNotification,
+  relativeReminderFacts,
+  scheduleAtMs
+} from "./lib/reminders";
+import {
+  reminderInput,
+  cancelReminderInput,
+  notificationIdsInput,
+  idInput,
+  timezoneInput
+} from "./lib/inputs";
 import { createTools } from "./tools";
 import { buildSystemPrompt } from "./prompt";
 import { clockContext, durationFacts } from "./lib/context";
@@ -205,7 +218,146 @@ export class ChatAgent extends AIChatAgent<Env, AgentState> {
     return { ok: true, timezone };
   }
 
+  async setReminder(taskId: string, remindAt: string) {
+    const input = reminderInput.safeParse({
+      task_id: taskId,
+      remind_at: remindAt
+    });
+    if (!input.success)
+      return {
+        ok: false,
+        error: "Reminder needs a task ID and ISO datetime with offset"
+      };
+    const task = db.getTask(this.sql.bind(this), taskId);
+    if (!task || task.status !== "open")
+      return { ok: false, error: "Reminder requires an open task" };
+    const ms = parseIsoToMs(remindAt);
+    if (ms <= Date.now())
+      return { ok: false, error: "Reminder time must be in the future" };
+    const id = crypto.randomUUID();
+    // Persist first: even a very near alarm must find its reminder row.
+    db.insertReminder(this.sql.bind(this), {
+      id,
+      task_id: taskId,
+      remind_at: ms,
+      schedule_id: null,
+      fired: 0,
+      cancelled: 0
+    });
+    try {
+      const scheduled = await this.schedule(
+        new Date(scheduleAtMs(ms)),
+        "fireReminder",
+        {
+          reminderId: id
+        }
+      );
+      const latest = db.getReminder(this.sql.bind(this), id)!;
+      db.updateReminder(this.sql.bind(this), {
+        ...latest,
+        schedule_id: scheduled.id
+      });
+      if (
+        latest.cancelled ||
+        latest.fired ||
+        db.getTask(this.sql.bind(this), taskId)?.status !== "open"
+      ) {
+        await this.cancelSchedule(scheduled.id);
+      }
+      this.refreshState();
+      return {
+        ok: true,
+        reminder_id: id,
+        remind_at_local: msToLocalIso(ms, this.state.timezone)
+      };
+    } catch {
+      const latest = db.getReminder(this.sql.bind(this), id)!;
+      db.updateReminder(this.sql.bind(this), { ...latest, cancelled: 1 });
+      this.refreshState();
+      return {
+        ok: false,
+        error: "Could not schedule the reminder. Please try again."
+      };
+    }
+  }
+
+  async cancelReminder(id: string) {
+    if (!cancelReminderInput.safeParse({ reminder_id: id }).success)
+      return { ok: false, error: "Invalid reminder ID" };
+    const reminder = db.getReminder(this.sql.bind(this), id);
+    if (!reminder) return { ok: false, error: "Reminder not found" };
+    if (reminder.fired) return { ok: false, error: "Reminder already fired" };
+    db.updateReminder(this.sql.bind(this), { ...reminder, cancelled: 1 });
+    if (reminder.schedule_id) {
+      try {
+        await this.cancelSchedule(reminder.schedule_id);
+      } catch {
+        console.warn(
+          "Schedule cancellation failed; persisted guard prevents firing"
+        );
+      }
+    }
+    this.refreshState();
+    return { ok: true, reminder_id: id };
+  }
+
+  fireReminder(payload: { reminderId: string }) {
+    this.ctx.storage.transactionSync(() => {
+      const reminder = db.getReminder(this.sql.bind(this), payload.reminderId);
+      const task = reminder
+        ? db.getTask(this.sql.bind(this), reminder.task_id)
+        : undefined;
+      const action = reminderAction(reminder, task);
+      if (action === "ignore" || !reminder) return;
+      if (action === "notify" && task)
+        db.insertNotification(
+          this.sql.bind(this),
+          reminderNotification(task, crypto.randomUUID(), Date.now())
+        );
+      db.updateReminder(this.sql.bind(this), { ...reminder, fired: 1 });
+    });
+    this.refreshState();
+  }
+
+  @callable()
+  markNotificationsRead(ids: string[]) {
+    const parsed = notificationIdsInput.safeParse(ids);
+    if (!parsed.success)
+      return { ok: false, error: "Invalid notification IDs" };
+    this.ctx.storage.transactionSync(() => {
+      for (const id of parsed.data)
+        db.markNotificationRead(this.sql.bind(this), id, Date.now());
+    });
+    this.refreshState();
+    return { ok: true };
+  }
+
+  @callable()
+  async completeTaskFromUi(id: string) {
+    if (!idInput.safeParse({ id }).success)
+      return { ok: false, error: "Invalid task ID" };
+    return this.completeTask(id);
+  }
+
+  @callable()
+  setTimezoneFromUi(timezone: string) {
+    if (!timezoneInput.safeParse({ timezone }).success)
+      return { ok: false, error: "Invalid timezone" };
+    // Only browser initialization uses this callable; explicit changes use chat.
+    if (this.state.timezone !== "UTC")
+      return { ok: true, timezone: this.state.timezone };
+    return this.setTimezone(timezone);
+  }
+
   async onChatMessage(_onFinish: unknown, options?: OnChatMessageOptions) {
+    const now = Date.now();
+    const userText =
+      this.messages
+        .filter((m) => m.role === "user")
+        .at(-1)
+        ?.parts.filter((p) => p.type === "text")
+        .map((p) => p.text)
+        .join(" ") ?? "";
     const workersai = createWorkersAI({
       binding: normalizedAiBinding(this.env.AI)
     });
@@ -215,14 +367,12 @@ export class ChatAgent extends AIChatAgent<Env, AgentState> {
         sessionAffinity: this.sessionAffinity
       }),
       system: buildSystemPrompt({
-        ...clockContext(Date.now(), this.state.timezone),
-        durations: durationFacts(
-          this.messages
-            .filter((m) => m.role === "user")
-            .at(-1)
-            ?.parts.filter((p) => p.type === "text")
-            .map((p) => p.text)
-            .join(" ") ?? ""
+        ...clockContext(now, this.state.timezone),
+        durations: durationFacts(userText),
+        relativeReminders: relativeReminderFacts(
+          userText,
+          now,
+          this.state.timezone
         )
       }),
       // Prune old tool calls and reasoning to save tokens on long conversations

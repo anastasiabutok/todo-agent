@@ -56,3 +56,17 @@ Environment: Node v24.13.0; npm 11.6.2.
 - A per-turn lookup guard in createTools prevents update/complete/log/drop/reopen from writing IDs not returned by listTasks in that turn. This protects against model-invented IDs even when history contains old IDs. Regression test verifies both unknown-ID rejection and reset across turns.
 - refreshState is private; mutation service methods call it after writes. Tool closures call those methods, preserving the spec's single refresh path without exposing it as a remote callable.
 - Required acceptance conversation used Europe/Prague on Tuesday 2026-11-03: Friday resolved to 2026-11-06T17:00:00+01:00; Monday to 2026-11-09T17:00:00+01:00. Stored estimate=120, actual=180, postponed_count=1, status=done; WebSocket snapshot has timezone Europe/Prague and openTasks=[]. No debug callable added for this phase; SQLite inspected read-only.
+
+## Phase 3 — scheduling and client state
+
+- Rechecked `schedule<T>(when: Date | string | number, callback: keyof this, payload?: T, options?): Promise<Schedule<T>>` and `cancelSchedule(id): Promise<boolean>` in installed Agents types. Scheduled callbacks use a public method name and the supplied payload; fireReminder is public but not a client callable.
+- `useAgent<ChatAgent, AgentState>` returns `state: AgentState | undefined` directly. The one-generic form can select the state-only overload; two generics keep state and stub methods typed. TaskPanel reads that state; no separate task array is stored in React.
+- UI callables use existing `@callable()` decorator. completeTaskFromUi is async so the typed SDK stub returns a flattened Promise instead of a union containing a nested Promise.
+- Reminder rows are inserted before awaiting schedule, so a near alarm cannot miss its row. schedule_id is merged into the latest row to preserve concurrent fired/cancelled flags. Schedule errors persist cancelled guards and return a small error result.
+- fireReminder checks persisted guards and task status, writes notification plus fired flag inside transactionSync, then refreshes state. No notification depends on broadcast-only delivery.
+- Browser notifications require an explicit button click to request permission; if permission was already granted, unread notifications create native notifications with stable tags. Persisted in-app banners remain available even if browser notifications are unsupported or denied.
+- Relative reminder datetime facts are computed in code from the latest user message and current clock, including DST transitions. The model uses these values rather than adding minutes.
+
+- Observed scheduler Date resolution: installed implementation floors Date milliseconds to Unix seconds. setReminder now schedules a code-rounded-up second while retaining exact requested remind_at in SQLite. Tested scheduleAtMs prevents delivery before the intended millisecond instant.
+
+- Live acceptance: two reminders at the same target; task checkbox cancelled one before delivery. Browser closed for more than three minutes; reopen showed exactly one banner. Read-only SQLite confirmed cancelled reminder never fired, delivery fired once, and banner dismissal persisted read_at. Mobile 390x844 task/chat tabs both had no document horizontal overflow. Browser permission was left at default; native OS notification delivery not manually tested.
