@@ -250,5 +250,5 @@ Consolidated observations from Phases 0–6-lite. Related incidents are merged b
 - Expected: The completed reduced-spec phases also pass the starter's Sanity Check workflow.
 - Actual: Run 41728959701 failed at oxfmt --check because the replacement SPEC.md had unformatted Markdown. The required reduced-phase typecheck and tests had passed, but those omit the formatting gate.
 - Time lost: ~2 min
-- Workaround: Format SPEC.md; keep its scope unchanged. Pin CI to Node 24, use npm ci and run npm test alongside npm run check. Local formatting, lint, typecheck and all 62 tests pass.
+- Workaround: Format SPEC.md; keep its scope unchanged. Pin CI to Node 24, use npm ci and run npm test alongside npm run check. Local formatting, lint, typecheck and all 62 tests pass. The first clean CI install then exposed a missing @emnapi/runtime@1.11.3 transitive lock entry; added its exact registry version, integrity and tslib dependency without changing direct dependencies.
 - Suggested fix (docs / API / error message): Align phase completion checks with all repository CI gates.
