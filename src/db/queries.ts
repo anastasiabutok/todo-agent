@@ -63,3 +63,13 @@ export function listUnreadNotifications(sql: Sql): Notification[] {
 export function markNotificationRead(sql: Sql, id: string, now: number): void {
   sql`UPDATE notifications SET read_at=${now} WHERE id=${id} AND read_at IS NULL`;
 }
+export function listCompletedInWindow(
+  sql: Sql,
+  since: number,
+  until: number
+): Task[] {
+  return sql<Task>`SELECT * FROM tasks WHERE status='done' AND completed_at >= ${since} AND completed_at <= ${until}`;
+}
+export function listPlanTasks(sql: Sql, end: number): Task[] {
+  return sql<Task>`SELECT * FROM tasks WHERE status='open' AND owner IS NULL AND ((due_at IS NOT NULL AND due_at <= ${end}) OR (due_at IS NULL AND priority=1))`;
+}

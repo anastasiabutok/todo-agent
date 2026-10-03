@@ -86,3 +86,20 @@ export function formatLocalDateTime(ms: number, timezone: string): string {
     timeStyle: "short"
   }).format(ms);
 }
+export function localTimeToMs(
+  date: string,
+  time: string,
+  timezone: string
+): number {
+  localDate.parse(date);
+  if (!/^\d{2}:\d{2}:\d{2}$/.test(time))
+    throw new RangeError("Invalid local time");
+  const target = parseIsoToMs(`${date}T${time}Z`);
+  let guess = target;
+  for (let i = 0; i < 5; i++) {
+    const difference = target - localWallMs(guess, timezone);
+    if (difference === 0) return guess;
+    guess += difference;
+  }
+  throw new RangeError("Local time does not exist in timezone");
+}

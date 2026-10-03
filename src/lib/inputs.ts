@@ -46,3 +46,7 @@ export const reminderInput = z.object({
 });
 export const cancelReminderInput = z.object({ reminder_id: z.string().min(1) });
 export const notificationIdsInput = z.array(z.string().min(1)).max(100);
+export const statsInput = z.object({
+  days: z.number().int().min(7).max(365).default(30)
+});
+export const planInput = z.object({ date: z.iso.date() });

@@ -75,3 +75,16 @@ describe("local days", () => {
     expect(() => startOfLocalDay(NaN, "UTC")).toThrow();
   });
 });
+
+import { localTimeToMs } from "../../src/lib/time";
+it("resolves local demo hours with season-correct offsets and rejects DST gaps", () => {
+  expect(localTimeToMs("2026-10-25", "10:00:00", "Europe/Prague")).toBe(
+    Date.parse("2026-10-25T09:00:00Z")
+  );
+  expect(localTimeToMs("2026-10-24", "10:00:00", "Europe/Prague")).toBe(
+    Date.parse("2026-10-24T08:00:00Z")
+  );
+  expect(() =>
+    localTimeToMs("2026-03-29", "02:30:00", "Europe/Prague")
+  ).toThrow();
+});

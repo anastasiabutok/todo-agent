@@ -70,3 +70,20 @@ Environment: Node v24.13.0; npm 11.6.2.
 - Observed scheduler Date resolution: installed implementation floors Date milliseconds to Unix seconds. setReminder now schedules a code-rounded-up second while retaining exact requested remind_at in SQLite. Tested scheduleAtMs prevents delivery before the intended millisecond instant.
 
 - Live acceptance: two reminders at the same target; task checkbox cancelled one before delivery. Browser closed for more than three minutes; reopen showed exactly one banner. Read-only SQLite confirmed cancelled reminder never fired, delivery fired once, and banner dismissal persisted read_at. Mobile 390x844 task/chat tabs both had no document horizontal overflow. Browser permission was left at default; native OS notification delivery not manually tested.
+
+## Phase 4 — planner and demo data
+
+- Existing tool/inputSchema, @callable and transactionSync signatures rechecked from installed starter/types; no new SDK API assumptions needed.
+- Completion statistics use a bounded completed_at window (including now, excluding future completions). Ten completed tasks unlock patterns; five valid estimate/actual pairs per kind unlock a median ratio rounded to two decimals. Hour bucketing uses Intl in the persisted IANA timezone.
+- Planner selection stays in typed SQL: open tasks owned by me, due through the end of the requested local date, plus undated priority-one tasks. Date end is DST-aware. Pure functions correct estimates with [0.5,3] clamping, preserve nulls, sort overdue/priority/due, and compute totals. Unknown estimates are counted separately and not invented.
+- Best bucket ties use stable order morning, afternoon, evening, night. Per-turn tools require getCompletionStats before proposeDayPlan and reuse that exact result, so history thresholds and ratios cannot silently differ between the two tool outputs.
+- seedDemoData checks DEV_AUTH_BYPASS exactly equals "true", runs in a transaction, and writes a \_meta demo_seeded marker for idempotence. It adds 40 completed demo tasks over the previous 28 days, plus two explicitly labeled open demo tasks to make the plan visible. Deep work has 1.5x estimates and morning completions; admin is afternoons. All IDs are generated in code, and fixture transforms are pure.
+- Optional Env flag is declared in src/env.d.ts; it is never added to wrangler.jsonc. Local .dev.vars is ignored and used only temporarily for seed verification.
+
+- Native SSE response mirrors may be JSON numbers, not only strings. Stream normalization now drops any native response mirror when OpenAI delta content is present; live probe confirmed values 202, 6, 11, 180, 30 and 210. Probe removed after regression and live verification.
+- Seed guard was verified with the flag absent, then local .dev.vars enabled it for a 40-completed/2-open seed; a repeated call returned already_seeded:true. Before seed, chat reported 2/10 history; after seed, tools reported 42 completed tasks, deep ratio 1.5 with 16 samples, morning deep work, afternoon admin, corrected estimates 180/30 and total 210.
+
+- AI SDK installed `PrepareStepFunction` receives steps including staticToolResults; it may return per-step system and toolChoice overrides. toolResults additionally contains dynamic results with unknown output, so use staticToolResults to narrow known application tool outputs.
+- After a successful proposeDayPlan, prepareStep supplies a focused plan-only system prompt and toolChoice:"none". Planner output includes code-computed remaining local buckets; final narration must keep exact minute counts and distinguish passed preferred buckets from availability today.
+
+- Final live planner response was verified against persisted chat JSON: morning deep-work preference, current evening availability, explicit underestimation warning, task durations 180/30 minutes and total 210 minutes, with no conversion to hours. Temporary numeric stream diagnostic removed. Temporary .dev.vars file removed after verification; seed fixture rows and idempotence marker remain local.

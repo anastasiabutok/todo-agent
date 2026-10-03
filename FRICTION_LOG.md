@@ -186,7 +186,7 @@
 - Expected: Failed local requests include actionable errors and stack traces.
 - Actual: Final server log inspection showed three “Error: internal error; reference = …” lines without stack traces, alongside successful chat results and HMR updates. Root cause not established; browser automation had also stalled during this run.
 - Time lost: ~0 min
-- Workaround: Verified acceptance through visible tool outputs, read-only SQLite and synced WebSocket state. Recorded as an open issue rather than guessing the cause. Phase 3 also logged six opaque internal errors during the closed-tab test; delivery, cancellation and dismissal still passed.
+- Workaround: Verified acceptance through visible tool outputs, read-only SQLite and synced WebSocket state. Recorded as an open issue rather than guessing the cause. Phase 3 also logged six opaque internal errors during the closed-tab test; delivery, cancellation and dismissal still passed. Similar opaque errors recurred in Phase 4 during browser/dev testing; final planner data and reply checks passed.
 - Suggested fix (docs / API / error message): Include request path and an actionable local stack trace for internal failures.
 
 ## Typed useAgent overload needs both generics
@@ -233,3 +233,57 @@
 - Time lost: ~1 min
 - Workaround: A tested pure helper rounds scheduled instants up to the next second while retaining the original requested remind_at in SQLite. Delivery is at most one second later and never early due to truncation.
 - Suggested fix (docs / API / error message): Document second-level schedule resolution or round future deadlines up instead of down.
+
+## Transient remote preview session failure
+
+- Product: Vite plugin | Wrangler
+- Expected: Local dev starts with the authenticated remote Workers AI binding.
+- Actual: First Phase 4 startup failed with “Could not create remote preview session on your account.” Authentication was still valid; a single retry started successfully without configuration changes.
+- Time lost: ~1 min
+- Workaround: Retry once and verify the existing login; no dashboard or resource changes.
+- Suggested fix (docs / API / error message): Include the underlying account/subdomain parse error and indicate whether a retry is appropriate.
+
+## Planner requests use string-valued days
+
+- Product: Workers AI
+- Expected: “plan my day” calls getCompletionStats with numeric days:30.
+- Actual: The low-history request passed immediately, but seeded requests initially used days:"30", failed strict validation, then corrected to numeric 30. Read-only calls made no data changes.
+- Time lost: ~1 min
+- Workaround: Keep strict validation and explicitly name all numeric tool fields in the system prompt. Record recovered schema retries rather than reporting a clean first attempt.
+- Suggested fix (docs / API / error message): Improve JSON numeric schema adherence and show precise tool validation errors.
+
+## Numeric tokens appear in two stream formats
+
+- Product: Workers AI | Agents SDK
+- Expected: Planner reply preserves corrected estimates 180 and 30 and total 210 exactly.
+- Actual: Seeded “plan my day” reply displayed 180180, 3030 and 210210 and a duplicated date. A temporary diagnostic confirmed native response fields can be numbers while the same token also appears as OpenAI text; prior normalization only removed string mirrors.
+- Time lost: ~2 min
+- Workaround: Prefer OpenAI text whenever a native response field is present, regardless of its type. Added regression coverage; rerun reply preserved all numbers and the date. Temporary diagnostic removed.
+- Suggested fix (docs / API / error message): Emit a single stream representation and keep response field types consistent; provider should avoid consuming both mirrors.
+
+## Preferred time windows already passed
+
+- Product: Workers AI
+- Expected: Evening “plan my day” uses observed morning/afternoon patterns as future-day preferences and proposes remaining work for today.
+- Actual: Initial seeded reply recommended deep work in the morning and admin in the afternoon despite the supplied current evening clock.
+- Time lost: ~1 min
+- Workaround: Add code-computed available buckets to planner output and a focused final-response system step after the plan tool. Past preferred windows are future-day preferences, not available slots today.
+- Suggested fix (docs / API / error message): Supply and enforce time-window availability alongside completion-pattern guidance.
+
+## Planner converts minutes to hours despite instructions
+
+- Product: Workers AI
+- Expected: “plan my day” copies corrected_est_minutes 180 and 30 and total_corrected_minutes 210 exactly as minutes.
+- Actual: After the numeric stream fix, another reply still rewrote durations as 3 hours and a 3.5-hour total, violating the no-arithmetic/no-conversion instruction.
+- Time lost: ~2 min
+- Workaround: A focused prepareStep override after proposeDayPlan limits the final response to verified plan data and exact minute labels; tools are disabled for that final summarization step.
+- Suggested fix (docs / API / error message): Improve numeric fidelity to tool outputs and support constrained final summaries without moving calculations to the model.
+
+## Mixed static/dynamic tool results hide output types
+
+- Product: AI SDK
+- Expected: Matching proposeDayPlan by toolName narrows a prepareStep tool result to its known output type.
+- Actual: toolResults also includes dynamic results with output:unknown, so matching the name alone still fails TypeScript narrowing.
+- Time lost: ~1 min
+- Workaround: Confirmed prepareStep, system/toolChoice overrides, and staticToolResults in installed ai/dist/index.d.ts. Use staticToolResults for the application's known tools.
+- Suggested fix (docs / API / error message): Show typed prepareStep examples using staticToolResults when dynamic tool output is not relevant.

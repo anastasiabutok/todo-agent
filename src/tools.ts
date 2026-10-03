@@ -1,3 +1,4 @@
+import type { CompletionStats } from "./lib/stats";
 import { tool } from "ai";
 import type { ChatAgent } from "./agent";
 import {
@@ -10,9 +11,12 @@ import {
   dropInput,
   timezoneInput,
   reminderInput,
-  cancelReminderInput
+  cancelReminderInput,
+  statsInput,
+  planInput
 } from "./lib/inputs";
 export function createTools(agent: ChatAgent) {
+  let planningStats: CompletionStats | undefined;
   const foundIds = new Set<string>();
   const requireLookup = (id: string) =>
     foundIds.has(id)
@@ -82,6 +86,27 @@ export function createTools(agent: ChatAgent) {
         "Cancel a reminder by its reminder_id returned by setReminder.",
       inputSchema: cancelReminderInput,
       execute: async ({ reminder_id }) => agent.cancelReminder(reminder_id)
+    }),
+    getCompletionStats: tool({
+      description:
+        "Get completion patterns and estimate ratios from history. ALWAYS call this before proposeDayPlan. If enough_data is false, do not claim patterns.",
+      inputSchema: statsInput,
+      execute: async ({ days }) => {
+        planningStats = agent.getCompletionStats(days);
+        return planningStats;
+      }
+    }),
+    proposeDayPlan: tool({
+      description:
+        "Propose tasks for a local YYYY-MM-DD date after getCompletionStats. Use corrected_est_minutes and total_corrected_minutes exactly; never recalculate them. Null estimates remain unknown.",
+      inputSchema: planInput,
+      execute: async ({ date }) =>
+        planningStats
+          ? agent.proposeDayPlan(date, planningStats)
+          : {
+              ok: false,
+              error: "Call getCompletionStats before proposing a day plan."
+            }
     }),
     setTimezone: tool({
       description: "Set the user's IANA timezone, for example Europe/Prague.",

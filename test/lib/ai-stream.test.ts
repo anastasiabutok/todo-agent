@@ -74,3 +74,10 @@ it("keeps only indexed OpenAI tool fragments when native mirrors omit index and 
     expect(normalized.choices).toEqual(event.choices);
   }
 });
+
+it("prefers OpenAI text when the native mirror is a number", () => {
+  const chunk = { response: 180, choices: [{ delta: { content: "180" } }] };
+  expect(
+    JSON.parse(normalizeAiEvent(`data: ${JSON.stringify(chunk)}`).slice(5))
+  ).toEqual({ choices: chunk.choices });
+});

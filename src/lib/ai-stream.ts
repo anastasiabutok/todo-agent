@@ -11,7 +11,7 @@ export function normalizeAiEvent(event: string): string {
         const delta = chunk?.choices?.[0]?.delta;
         if (
           typeof delta?.content === "string" &&
-          typeof chunk.response === "string"
+          chunk.response !== undefined
         ) {
           delete chunk.response;
           changed = true;

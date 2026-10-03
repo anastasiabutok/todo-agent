@@ -140,3 +140,33 @@ it("rolls back DDL and version changes together when a migration fails", () => {
   ).toEqual([]);
   expect(sql`SELECT * FROM _meta`).toEqual([]);
 });
+
+import { listPlanTasks, listCompletedInWindow } from "../../src/db/queries";
+import { planDateEnd } from "../../src/lib/plan";
+it("selects only my open tasks through the local date plus undated priority-one tasks", () => {
+  const end = planDateEnd("2026-10-25", "Europe/Prague");
+  for (const row of [
+    { ...task("end", "At end"), due_at: end },
+    { ...task("next", "Too late"), due_at: end + 1 },
+    { ...task("owned", "Delegated"), due_at: end, owner: "Alex" },
+    { ...task("urgent", "No due urgent"), priority: 1 as const },
+    { ...task("later", "No due normal") },
+    {
+      ...task("done", "Done"),
+      status: "done" as const,
+      due_at: end,
+      completed_at: 100
+    }
+  ])
+    insertTask(sql, row);
+  expect(
+    listPlanTasks(sql, end)
+      .map((t) => t.id)
+      .sort()
+  ).toEqual(["end", "urgent"]);
+  expect(listCompletedInWindow(sql, 50, 150).map((t) => t.id)).toEqual([
+    "done"
+  ]);
+  expect(listCompletedInWindow(sql, 101, 200)).toEqual([]);
+  expect(listCompletedInWindow(sql, 0, 99)).toEqual([]);
+});

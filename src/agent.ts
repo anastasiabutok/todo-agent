@@ -1,4 +1,11 @@
 import {
+  completionStats,
+  historyCutoff,
+  type CompletionStats
+} from "./lib/stats";
+import { dayPlan, planDateEnd } from "./lib/plan";
+import { demoTasks } from "./lib/demo";
+import {
   reminderAction,
   reminderNotification,
   relativeReminderFacts,
@@ -12,7 +19,7 @@ import {
   timezoneInput
 } from "./lib/inputs";
 import { createTools } from "./tools";
-import { buildSystemPrompt } from "./prompt";
+import { buildSystemPrompt, buildPlanReplyPrompt } from "./prompt";
 import { clockContext, durationFacts } from "./lib/context";
 import {
   newTask,
@@ -349,6 +356,51 @@ export class ChatAgent extends AIChatAgent<Env, AgentState> {
     return this.setTimezone(timezone);
   }
 
+  getCompletionStats(days: number) {
+    const now = Date.now();
+    return completionStats(
+      db.listCompletedInWindow(
+        this.sql.bind(this),
+        historyCutoff(now, days),
+        now
+      ),
+      this.state.timezone
+    );
+  }
+
+  proposeDayPlan(date: string, stats: CompletionStats) {
+    const tasks = db.listPlanTasks(
+      this.sql.bind(this),
+      planDateEnd(date, this.state.timezone)
+    );
+    return {
+      date,
+      ...dayPlan(tasks, stats, Date.now(), this.state.timezone, date)
+    };
+  }
+
+  @callable()
+  seedDemoData() {
+    if (this.env.DEV_AUTH_BYPASS !== "true")
+      return {
+        ok: false,
+        error: "Demo seeding is only available with local DEV_AUTH_BYPASS=true"
+      };
+    if (this.sql`SELECT value FROM _meta WHERE key='demo_seeded'`.length)
+      return { ok: true, already_seeded: true };
+    const tasks = demoTasks(
+      Date.now(),
+      this.state.timezone,
+      Array.from({ length: 42 }, () => crypto.randomUUID())
+    );
+    this.ctx.storage.transactionSync(() => {
+      for (const task of tasks) db.insertTask(this.sql.bind(this), task);
+      this.sql`INSERT INTO _meta (key,value) VALUES ('demo_seeded','1')`;
+    });
+    this.refreshState();
+    return { ok: true, completed_count: 40, open_count: 2 };
+  }
+
   async onChatMessage(_onFinish: unknown, options?: OnChatMessageOptions) {
     const now = Date.now();
     const userText =
@@ -362,7 +414,8 @@ export class ChatAgent extends AIChatAgent<Env, AgentState> {
       binding: normalizedAiBinding(this.env.AI)
     });
 
-    const result = streamText({
+    const tools = createTools(this);
+    const result = streamText<typeof tools>({
       model: workersai("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
         sessionAffinity: this.sessionAffinity
       }),
@@ -381,7 +434,20 @@ export class ChatAgent extends AIChatAgent<Env, AgentState> {
         toolCalls: "before-last-2-messages",
         reasoning: "before-last-message"
       }),
-      tools: createTools(this),
+      tools,
+      prepareStep: ({ steps }) => {
+        const plan = steps
+          .at(-1)
+          ?.staticToolResults.find(
+            (result) => result.toolName === "proposeDayPlan"
+          );
+        if (plan && "tasks" in plan.output)
+          return {
+            toolChoice: "none",
+            system: buildPlanReplyPrompt(plan.output)
+          };
+        return {};
+      },
       stopWhen: stepCountIs(6),
       abortSignal: options?.abortSignal
     });

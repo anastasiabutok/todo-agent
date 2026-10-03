@@ -36,7 +36,12 @@
 
 ## Phase 4 — Planner
 
-- Status: not started
+- Status: done
+- Built: Pure completion statistics and planning functions with ten-task cold threshold, five-pair per-kind medians, local-hour buckets, 1.3 underestimation warning, clamped estimate corrections, unknown-estimate handling and code-computed available windows. Typed SQL history/date/owner selection; getCompletionStats/proposeDayPlan tools with per-turn ordering guard. Focused final-response step preserves minute counts and distinguishes passed preferred windows from availability. Guarded, idempotent seedDemoData adds 40 completed demo tasks and two labeled open examples. Extended stream adapter for native numeric mirrors.
+- Verification: npx tsc --noEmit, npm test (62 tests), lint and formatting pass. Local dev started on retry after a transient preview error. Before seeding, “plan my day” called stats then planner, returned enough_data:false at 2/10 history, and acknowledged insufficient history. seedDemoData was rejected without DEV_AUTH_BYPASS; enabling it only in ignored .dev.vars inserted 40 completed/2 open tasks; repeat call returned already_seeded:true. Seeded “plan my day” reported 42 completed tasks and deep ratio 1.5 with 16 samples; final reply identifies morning deep-work preference, switches to remaining evening today, warns about underestimation, and preserves corrected durations 180/30 and total 210 minutes. Persisted chat JSON verified those exact numbers and windows. Low-history result verified in visible browser tool output; final seeded screenshot saved in parent outputs/phase-4-plan.png. Temporary stream diagnostic and local .dev.vars flag removed; demo rows retained intentionally.
+- Friction: Six new entries: transient preview error, string days retry, numeric stream mirrors, past preferred windows, minute-to-hour conversion, mixed tool-result typing. Earlier opaque local dev internal errors recurred without stack traces; final tool data and reply checks passed. Existing dependency audit findings remain untriaged.
+- Git: Staged diff review, phase commit and push finalize the phase. No deployment or Cloudflare dashboard/resource changes.
+- Next: Phase 5 — Brain-dump (wait for user continuation).
 
 ## Phase 5 — Brain-dump
 
