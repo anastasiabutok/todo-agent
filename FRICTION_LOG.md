@@ -186,7 +186,7 @@
 - Expected: Failed local requests include actionable errors and stack traces.
 - Actual: Final server log inspection showed three “Error: internal error; reference = …” lines without stack traces, alongside successful chat results and HMR updates. Root cause not established; browser automation had also stalled during this run.
 - Time lost: ~0 min
-- Workaround: Verified acceptance through visible tool outputs, read-only SQLite and synced WebSocket state. Recorded as an open issue rather than guessing the cause.
+- Workaround: Verified acceptance through visible tool outputs, read-only SQLite and synced WebSocket state. Recorded as an open issue rather than guessing the cause. Phase 3 also logged six opaque internal errors during the closed-tab test; delivery, cancellation and dismissal still passed.
 - Suggested fix (docs / API / error message): Include request path and an actionable local stack trace for internal failures.
 
 ## Typed useAgent overload needs both generics
