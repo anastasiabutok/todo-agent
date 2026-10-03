@@ -7,13 +7,23 @@ export function normalizeAiEvent(event: string): string {
       if (!line.startsWith("data:")) return line;
       try {
         const chunk = JSON.parse(line.slice(5));
+        let changed = false;
+        const delta = chunk?.choices?.[0]?.delta;
         if (
-          typeof chunk?.choices?.[0]?.delta?.content === "string" &&
+          typeof delta?.content === "string" &&
           typeof chunk.response === "string"
         ) {
           delete chunk.response;
-          return `data: ${JSON.stringify(chunk)}`;
+          changed = true;
         }
+        if (
+          Array.isArray(delta?.tool_calls) &&
+          Array.isArray(chunk.tool_calls)
+        ) {
+          delete chunk.tool_calls;
+          changed = true;
+        }
+        if (changed) return `data: ${JSON.stringify(chunk)}`;
       } catch {
         // Preserve [DONE] and unrecognized events for the provider to handle.
       }

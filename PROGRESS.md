@@ -18,7 +18,12 @@
 
 ## Phase 2 — Core tools + system prompt
 
-- Status: not started
+- Status: done
+- Built: Eight Zod-validated tools (list/add/update/complete/log actual/drop/reopen/timezone), per-turn task lookup guard, private refreshState, typed initial state, shared mutation paths and cancellation guards. Pure task transforms and duration conversions with tests. Fresh local clock, weekday and timezone in system prompt, plus identity/ambiguity/attention/actual-time/brain-dump/planner rules. Extended provider stream compatibility to mirrored tool fragments.
+- Verification: npx tsc --noEmit, npm test (36 tests), formatting and lint pass. Local dev starts without errors. Manually in browser chat: set Europe/Prague; “add write report due Friday 5pm, deep work, 2 hours” creates due 2026-11-06 17:00 +01:00, deep, estimate 120. “move the report to Monday” calls listTasks then updateTask, preserves 17:00, moves to 2026-11-09 and sets postponed_count=1. “done with the report, took 3 hours” eventually calls completeTask with numeric 180 after rejected model attempts (logged); read-only SQLite confirms done/actual 180/estimate 120/postponed_count 1. WebSocket synced state confirms timezone Europe/Prague and no open report. Added tested lookup guard and stronger numeric prompt after observing failures. Acceptance screenshot saved in parent outputs/phase-2-chat.png. No temporary debug method or stream probe remains.
+- Friction: Four new entries covering mirrored tool fragments, code-owned duration conversion, string estimate and invented completion ID/string actual. Inherited audit findings and browser automation stalls remain. Successful writes and final data verified; model may still need retries after schema errors.
+- Git: Reviewed staged diff for secrets; commit and push finalize the phase.
+- Next: Phase 3 — Reminders + notifications + UI panel (wait for user continuation).
 
 ## Phase 3 — Reminders + notifications + UI panel
 

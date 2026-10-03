@@ -57,3 +57,20 @@ it("normalizes events split across transport chunks without corrupting UTF-8", a
   const text = await new Response(stream as ReadableStream).text();
   expect(text).toBe(event.split("\n\n").map(normalizeAiEvent).join("\n\n"));
 });
+
+it("keeps only indexed OpenAI tool fragments when native mirrors omit index and ID", () => {
+  for (const delta of [
+    { id: "call-1", index: 0, function: { name: "setTimezone" } },
+    { index: 0, function: { arguments: '{"timezone":"Europe/Prague"}' } }
+  ]) {
+    const event = {
+      tool_calls: [{ name: "setTimezone" }],
+      choices: [{ delta: { tool_calls: [delta] } }]
+    };
+    const normalized = JSON.parse(
+      normalizeAiEvent(`data: ${JSON.stringify(event)}`).slice(5)
+    );
+    expect(normalized.tool_calls).toBeUndefined();
+    expect(normalized.choices).toEqual(event.choices);
+  }
+});

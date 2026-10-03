@@ -143,3 +143,39 @@
 - Time lost: ~0 min
 - Workaround: Keep the warning visible; verify actual Workers behavior separately with the temporary callable.
 - Suggested fix (docs / API / error message): Document Node runtime requirements and stability status for local SQLite tests.
+
+## Mirrored tool fragments lose arguments
+
+- Product: Workers AI | Agents SDK
+- Expected: “Set my timezone to Europe/Prague.” executes setTimezone once with the supplied timezone.
+- Actual: Provider consumed native and OpenAI tool fragments together, creating calls with empty arguments and repeating errors. Raw stream showed correct indexed OpenAI fragments and unindexed native mirrors. Stopped the initial retries; no task mutation occurred.
+- Time lost: ~3 min
+- Workaround: Keep indexed OpenAI tool fragments when both formats appear, add regression coverage, remove temporary stream probe, and cap chat turns at six steps. Timezone tool then succeeded.
+- Suggested fix (docs / API / error message): Provider should prefer one tool representation; UI should expose schema validation error details instead of “An error occurred.”
+
+## Minute-only tools versus hour-based acceptance prompts
+
+- Product: Tooling (application specification)
+- Expected: Model must never do arithmetic while requests like “2 hours” populate minute-only tool inputs.
+- Actual: Tool schemas accept minutes, while acceptance prompts supply hours; leaving conversion to the model would violate the arithmetic rule.
+- Time lost: ~1 min
+- Workaround: A tested pure helper extracts numeric duration expressions and provides code-computed conversions in each system prompt.
+- Suggested fix (docs / API / error message): Specify a code-owned duration conversion path alongside minute-only tool inputs.
+
+## Model sends string estimate before correcting it
+
+- Product: Workers AI
+- Expected: “add write report due Friday 5pm, deep work, 2 hours” supplies est_minutes as numeric 120 from the code-provided conversion.
+- Actual: First addTask input used string "120" and failed validation; the model retried with numeric 120 and created exactly one task. Date, offset and kind were correct.
+- Time lost: ~1 min
+- Workaround: Preserve strict numeric validation; strengthen prompt to require JSON numbers. Record the recovered retry instead of reporting a clean first-attempt run.
+- Suggested fix (docs / API / error message): Improve numeric schema adherence and expose useful validation details to the user/model.
+
+## Model invents ID and string actual time before recovery
+
+- Product: Workers AI
+- Expected: “done with the report, took 3 hours” calls listTasks first, then completeTask with the returned ID and numeric 180.
+- Actual: First attempted completeTask with invented id "report_id" and string "180"; schema rejected it. Then listTasks returned the real ID; another string-valued attempt failed before a numeric 180 call succeeded. Final stored status/time were correct.
+- Time lost: ~1 min
+- Workaround: Add a per-turn lookup guard that blocks mutation for any ID not returned by listTasks; test that the guard resets each turn. Strengthen numeric prompt and retain strict validation.
+- Suggested fix (docs / API / error message): Improve tool sequencing and schema adherence; show actual schema errors rather than generic errors.

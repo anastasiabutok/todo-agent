@@ -41,3 +41,18 @@ Environment: Node v24.13.0; npm 11.6.2.
 - Time helpers accept explicit IANA timezone; day boundary search uses Intl calendar dates instead of assuming 24 hours. Tested Europe/Prague DST changes, skipped midnight, skipped date, offsets and millisecond roundtrips.
 - Node 24 builtin `node:sqlite` DatabaseSync provides real SQLite integration tests without another runtime dependency; Node emits an experimental warning. These complement the live Workers schema check.
 - Temporary @callable debugSchema returned schema_version “1” plus tasks/reminders/notifications. Removed afterward; live RPC now returns “Method debugSchema does not exist”.
+
+## Phase 2 — tools and state
+
+- Confirmed installed AIChatAgent signature is `AIChatAgent<Env, State, Props>`; state snapshot uses `AIChatAgent<Env, AgentState>` with typed initialState.
+- `this.setState(state: State): void` persists and broadcasts snapshots; `refreshState` queries SQLite and derives views through pure helpers after mutations and at startup.
+- Confirmed AI SDK `tool({ inputSchema, execute })` against installed definitions. Each execute closes over the current agent through createTools(this) inside onChatMessage. No approval-only tools are used.
+- Scheduler cancellation is `cancelSchedule(id): Promise<boolean>`; completion/drop first persist cancelled=1 guards before awaiting cancellation. Tool rejects invalid transitions with ok:false; no hard deletion.
+- Pure helpers handle task creation/patches/status transitions/views, timezone validation, and hour-to-minute conversions supplied in the system prompt. IDs come from crypto.randomUUID in code, times from Date.now/parseIsoToMs.
+- Multi-step system prompt includes fresh local ISO, weekday, IANA timezone, identity lookup, ambiguous matching, reminder warning, actual-time follow-up, postponement attention, and future planner/brain-dump constraints. Phase 2 exposes eight core tools only.
+- Streaming compatibility additionally removes top-level tool_calls when indexed choices[0].delta.tool_calls exists. Raw local test stream contained mirrored native tool fragments without IDs/indexes; consuming both caused empty-argument calls. Preserved OpenAI fragments keep valid arguments. Temporary raw-stream logging removed.
+- Chat steps limited to six per turn to bound retry loops; normal lookup plus mutation requires two tool steps.
+
+- A per-turn lookup guard in createTools prevents update/complete/log/drop/reopen from writing IDs not returned by listTasks in that turn. This protects against model-invented IDs even when history contains old IDs. Regression test verifies both unknown-ID rejection and reset across turns.
+- refreshState is private; mutation service methods call it after writes. Tool closures call those methods, preserving the spec's single refresh path without exposing it as a remote callable.
+- Required acceptance conversation used Europe/Prague on Tuesday 2026-11-03: Friday resolved to 2026-11-06T17:00:00+01:00; Monday to 2026-11-09T17:00:00+01:00. Stored estimate=120, actual=180, postponed_count=1, status=done; WebSocket snapshot has timezone Europe/Prague and openTasks=[]. No debug callable added for this phase; SQLite inspected read-only.

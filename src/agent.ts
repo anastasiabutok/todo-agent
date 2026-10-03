@@ -1,3 +1,19 @@
+import { createTools } from "./tools";
+import { buildSystemPrompt } from "./prompt";
+import { clockContext, durationFacts } from "./lib/context";
+import {
+  newTask,
+  editTask,
+  taskViews,
+  taskSummary,
+  finishedTask,
+  reopenedTask,
+  validTimezone
+} from "./lib/tasks";
+import { parseIsoToMs, msToLocalIso } from "./lib/time";
+import type { AgentState } from "./lib/types";
+import type { AddInput, UpdateInput, ListInput } from "./lib/inputs";
+import * as db from "./db/queries";
 import { runMigrations } from "./db/migrate";
 import { normalizedAiBinding } from "./workers-ai";
 import { createWorkersAI } from "workers-ai-provider";
@@ -10,7 +26,12 @@ import {
   streamText
 } from "ai";
 
-export class ChatAgent extends AIChatAgent<Env> {
+export class ChatAgent extends AIChatAgent<Env, AgentState> {
+  initialState: AgentState = {
+    timezone: "UTC",
+    openTasks: [],
+    unreadNotifications: []
+  };
   maxPersistedMessages = 100;
   chatRecovery = true;
   // Wait for MCP connections to be re-established after hibernation before
@@ -19,6 +40,7 @@ export class ChatAgent extends AIChatAgent<Env> {
 
   onStart() {
     this.ctx.storage.transactionSync(() => runMigrations(this.sql.bind(this)));
+    this.refreshState();
     // Configure OAuth popup behavior for MCP servers that require authentication
     this.mcp.configureOAuthCallback({
       customHandler: (result) => {
@@ -46,6 +68,143 @@ export class ChatAgent extends AIChatAgent<Env> {
     await this.removeMcpServer(serverId);
   }
 
+  private refreshState(timezone = this.state.timezone) {
+    this.setState({
+      timezone,
+      openTasks: taskViews(db.listOpenTasks(this.sql.bind(this)), Date.now()),
+      unreadNotifications: db.listUnreadNotifications(this.sql.bind(this))
+    });
+  }
+
+  findTasks(input: ListInput) {
+    return {
+      tasks: db
+        .listTasks(this.sql.bind(this), {
+          status: input.status,
+          dueBefore: input.due_before ? parseIsoToMs(input.due_before) : null,
+          query: input.query,
+          limit: input.limit
+        })
+        .map((task) => taskSummary(task, this.state.timezone))
+    };
+  }
+
+  addTask(input: AddInput) {
+    if (input.parent_id && !db.getTask(this.sql.bind(this), input.parent_id))
+      return { ok: false, error: "Parent task not found" };
+    const task = newTask(input, crypto.randomUUID(), Date.now());
+    db.insertTask(this.sql.bind(this), task);
+    this.refreshState();
+    return { ok: true, ...taskSummary(task, this.state.timezone) };
+  }
+
+  updateTask(input: UpdateInput) {
+    const task = db.getTask(this.sql.bind(this), input.id);
+    if (!task) return { ok: false, error: "Task not found" };
+    if (task.status !== "open")
+      return { ok: false, error: "Only open tasks can be updated" };
+    const updated = editTask(task, input);
+    const reminders =
+      updated.due_at !== task.due_at
+        ? db.listActiveReminders(this.sql.bind(this), task.id)
+        : [];
+    db.updateTask(this.sql.bind(this), updated);
+    this.refreshState();
+    return {
+      ok: true,
+      ...taskSummary(updated, this.state.timezone),
+      ...(reminders.length
+        ? {
+            reminder_note: `Task has a reminder at ${reminders.map((r) => msToLocalIso(r.remind_at, this.state.timezone)).join(", ")}; ask the user whether to move it.`
+          }
+        : {})
+    };
+  }
+
+  private async cancelTaskReminders(taskId: string) {
+    const reminders = db.listActiveReminders(this.sql.bind(this), taskId);
+    for (const reminder of reminders) {
+      // Persist the guard before attempting scheduler cancellation.
+      db.updateReminder(this.sql.bind(this), { ...reminder, cancelled: 1 });
+    }
+    for (const reminder of reminders) {
+      if (reminder.schedule_id) {
+        try {
+          await this.cancelSchedule(reminder.schedule_id);
+        } catch {
+          console.warn(
+            "Schedule cancellation failed; persisted reminder guard prevents firing"
+          );
+        }
+      }
+    }
+  }
+
+  async completeTask(id: string, actual?: number) {
+    const task = db.getTask(this.sql.bind(this), id);
+    if (!task) return { ok: false, error: "Task not found" };
+    if (task.status !== "open")
+      return { ok: false, error: "Only open tasks can be completed" };
+    db.updateTask(
+      this.sql.bind(this),
+      finishedTask(task, "done", Date.now(), actual)
+    );
+    await this.cancelTaskReminders(id);
+    this.refreshState();
+    return {
+      ok: true,
+      id,
+      title: task.title,
+      actual_minutes: actual ?? task.actual_minutes,
+      ...(actual === undefined ? { ask_actual_minutes: true } : {})
+    };
+  }
+
+  logActualMinutes(id: string, actual: number) {
+    const task = db.getTask(this.sql.bind(this), id);
+    if (!task) return { ok: false, error: "Task not found" };
+    if (task.status !== "done")
+      return {
+        ok: false,
+        error: "Actual time can only be logged for done tasks"
+      };
+    db.updateTask(this.sql.bind(this), { ...task, actual_minutes: actual });
+    this.refreshState();
+    return { ok: true, id, actual_minutes: actual };
+  }
+
+  async dropTask(id: string, reason?: string) {
+    const task = db.getTask(this.sql.bind(this), id);
+    if (!task) return { ok: false, error: "Task not found" };
+    if (task.status !== "open")
+      return { ok: false, error: "Only open tasks can be dropped" };
+    db.updateTask(
+      this.sql.bind(this),
+      finishedTask(task, "dropped", Date.now())
+    );
+    await this.cancelTaskReminders(id);
+    this.refreshState();
+    return { ok: true, id, title: task.title, ...(reason ? { reason } : {}) };
+  }
+
+  reopenTask(id: string) {
+    const task = db.getTask(this.sql.bind(this), id);
+    if (!task) return { ok: false, error: "Task not found" };
+    if (task.status === "open")
+      return { ok: false, error: "Task is already open" };
+    const updated = reopenedTask(task);
+    db.updateTask(this.sql.bind(this), updated);
+    this.refreshState();
+    return { ok: true, ...taskSummary(updated, this.state.timezone) };
+  }
+
+  setTimezone(timezone: string) {
+    if (!validTimezone(timezone))
+      return { ok: false, error: "Invalid IANA timezone" };
+    this.refreshState(timezone);
+    return { ok: true, timezone };
+  }
+
   async onChatMessage(_onFinish: unknown, options?: OnChatMessageOptions) {
     const workersai = createWorkersAI({
       binding: normalizedAiBinding(this.env.AI)
@@ -55,15 +214,25 @@ export class ChatAgent extends AIChatAgent<Env> {
       model: workersai("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
         sessionAffinity: this.sessionAffinity
       }),
-      system: "You are a helpful assistant. Keep replies short.",
+      system: buildSystemPrompt({
+        ...clockContext(Date.now(), this.state.timezone),
+        durations: durationFacts(
+          this.messages
+            .filter((m) => m.role === "user")
+            .at(-1)
+            ?.parts.filter((p) => p.type === "text")
+            .map((p) => p.text)
+            .join(" ") ?? ""
+        )
+      }),
       // Prune old tool calls and reasoning to save tokens on long conversations
       messages: pruneMessages({
         messages: await convertToModelMessages(this.messages),
         toolCalls: "before-last-2-messages",
         reasoning: "before-last-message"
       }),
-      tools: {},
-      stopWhen: stepCountIs(20),
+      tools: createTools(this),
+      stopWhen: stepCountIs(6),
       abortSignal: options?.abortSignal
     });
 
