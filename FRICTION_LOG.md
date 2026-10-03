@@ -1,5 +1,14 @@
 # Friction log
 
+Consolidated observations from Phases 0–6-lite. Related incidents are merged below; original request examples, approximate time estimates and unresolved issues are retained. Times are rough estimates, not measurements; slash-separated times refer to separate incidents.
+
+## Current status
+
+- Addressed in code: dual-format stream duplication, unknown-ID mutations, scheduler millisecond truncation, planner estimate transforms and available-window context.
+- Mitigated, not guaranteed: model schema retries and planner narration. The Phase 5 statistics-only restriction passed compile/tests but has not been live-rechecked; brain-dump confirmation remains prompt-enforced.
+- Open: original 24 dependency audit findings, opaque local internal errors, browser reload stalls, and generic tool error messages. Native OS notifications and production Access remain unverified.
+- Delivery: no deployment, dashboard edits, JWT middleware or AI Gateway implementation. Phase 6 is documentation and log cleanup only.
+
 ## GitHub CLI unavailable
 
 - Product: Tooling (GitHub CLI)
@@ -8,15 +17,6 @@
 - Time lost: ~1 min
 - Workaround: Stop Phase 0 as required by SPEC.md; ask the user to install and authenticate GitHub CLI.
 - Suggested fix (docs / API / error message): Document GitHub CLI installation and authentication as prerequisites before scaffolding.
-
-## Entry template
-
-- Product: Agents SDK | Workers AI | Durable Objects | Access | Wrangler | AI Gateway | Vite plugin
-- Expected:
-- Actual:
-- Time lost: ~N min
-- Workaround:
-- Suggested fix (docs / API / error message):
 
 ## Sandbox hides valid GitHub authentication
 
@@ -33,7 +33,7 @@
 - Expected: create-cloudflare configures TypeScript cleanly.
 - Actual: Reports failed to update tsconfig.json; template extends agents/tsconfig.
 - Time lost: ~1 min
-- Workaround: Preserve template config; TypeScript verification still pending.
+- Workaround: Preserved template config; subsequent TypeScript checks passed.
 - Suggested fix (docs / API / error message): Include the precise config update failure and whether manual changes are needed.
 
 ## Scheduling APIs are asynchronous
@@ -42,26 +42,8 @@
 - Expected: Starter examples safely await scheduling operations.
 - Actual: Starter calls schedule/cancelSchedule without await; installed types return Promises. getSchedules is deprecated in favor of listSchedules.
 - Time lost: ~1 min
-- Workaround: Use installed signatures and await operations in future implementation.
+- Workaround: Implemented awaited scheduling and cancellation using the installed signatures.
 - Suggested fix (docs / API / error message): Update starter scheduling tools to await operations and use listSchedules.
-
-## Local development needs Cloudflare login
-
-- Product: Workers AI | Vite plugin
-- Expected: Starter local server starts after dependency installation.
-- Actual: Sandbox first denies port 9229; outside sandbox remote AI binding fails because Cloudflare credentials are missing.
-- Time lost: ~2 min
-- Workaround: Ask user to run npx wrangler login; preserve remote model binding.
-- Suggested fix (docs / API / error message): State remote binding authentication prerequisite before scaffold completion and offer interactive login guidance.
-
-## Wrangler reports expired login after continuation
-
-- Product: Wrangler
-- Expected: Cloudflare login is usable after the user requests continuation.
-- Actual: `wrangler whoami` outside sandbox says the auth token expired and could not be refreshed. Dev server still reports generic missing API token guidance.
-- Time lost: ~1 min
-- Workaround: Ask user to repeat interactive login and verify with whoami before resuming.
-- Suggested fix (docs / API / error message): Remote binding startup should preserve the expired OAuth credential error instead of replacing it with API token guidance.
 
 ## Starter model unavailable on Workers Free
 
@@ -69,7 +51,7 @@
 - Expected: Authenticated starter chat answers a basic greeting.
 - Actual: UI connects, but inference returns 5035: @cf/moonshotai/kimi-k2.7-code is not available on Workers Free plan. No assistant reply appears in chat.
 - Time lost: ~3 min
-- Workaround: Stop for user decision on plan upgrade or explicit model exception; preserve starter model.
+- Workaround: User authorized the Free-plan exception; switched to Llama 3.3. No plan upgrade was performed.
 - Suggested fix (docs / API / error message): Document paid-plan prerequisite in starter and display inference errors in chat.
 
 ## Starter has no test runner
@@ -89,15 +71,6 @@
 - Time lost: ~0 min
 - Workaround: Recorded findings; no automatic breaking dependency upgrades.
 - Suggested fix (docs / API / error message): Keep template dependencies updated and publish audit guidance.
-
-## Duplicate stream text with Free-plan models
-
-- Product: Workers AI | Agents SDK
-- Expected: Llama 3.3 greeting appears once.
-- Actual: “Say hello in one short sentence.” produced “HelloHello,, how can I how can I help help you? you?” Qwen trial duplicated “The capital of France is Paris.” and fragmented reasoning. Installed provider emits native response and OpenAI delta content independently.
-- Time lost: ~6 min
-- Workaround: Normalize dual-format SSE text before provider parsing; preserve metadata and UTF-8. Added three regression tests. Selected Llama 3.3 with user-authorized model exception.
-- Suggested fix (docs / API / error message): Provider should prefer one text representation when both appear in a stream event.
 
 ## Generated files fail starter formatting check
 
@@ -144,15 +117,6 @@
 - Workaround: Keep the warning visible; verify actual Workers behavior separately with the temporary callable.
 - Suggested fix (docs / API / error message): Document Node runtime requirements and stability status for local SQLite tests.
 
-## Mirrored tool fragments lose arguments
-
-- Product: Workers AI | Agents SDK
-- Expected: “Set my timezone to Europe/Prague.” executes setTimezone once with the supplied timezone.
-- Actual: Provider consumed native and OpenAI tool fragments together, creating calls with empty arguments and repeating errors. Raw stream showed correct indexed OpenAI fragments and unindexed native mirrors. Stopped the initial retries; no task mutation occurred.
-- Time lost: ~3 min
-- Workaround: Keep indexed OpenAI tool fragments when both formats appear, add regression coverage, remove temporary stream probe, and cap chat turns at six steps. Timezone tool then succeeded.
-- Suggested fix (docs / API / error message): Provider should prefer one tool representation; UI should expose schema validation error details instead of “An error occurred.”
-
 ## Minute-only tools versus hour-based acceptance prompts
 
 - Product: Tooling (application specification)
@@ -161,15 +125,6 @@
 - Time lost: ~1 min
 - Workaround: A tested pure helper extracts numeric duration expressions and provides code-computed conversions in each system prompt.
 - Suggested fix (docs / API / error message): Specify a code-owned duration conversion path alongside minute-only tool inputs.
-
-## Model sends string estimate before correcting it
-
-- Product: Workers AI
-- Expected: “add write report due Friday 5pm, deep work, 2 hours” supplies est_minutes as numeric 120 from the code-provided conversion.
-- Actual: First addTask input used string "120" and failed validation; the model retried with numeric 120 and created exactly one task. Date, offset and kind were correct.
-- Time lost: ~1 min
-- Workaround: Preserve strict numeric validation; strengthen prompt to require JSON numbers. Record the recovered retry instead of reporting a clean first-attempt run.
-- Suggested fix (docs / API / error message): Improve numeric schema adherence and expose useful validation details to the user/model.
 
 ## Model invents ID and string actual time before recovery
 
@@ -207,15 +162,6 @@
 - Workaround: Make completeTaskFromUi async so every return path resolves to one flattened result type.
 - Suggested fix (docs / API / error message): Use Awaited in stub result mapping or document that callable wrappers should be async.
 
-## Reminder request needs one numeric-schema retry
-
-- Product: Workers AI
-- Expected: “Remind me about. reminderdelivery check in 2 minutes and about cancellation check in 2 minutes.” performs lookups and schedules both using code-computed ISO datetimes.
-- Actual: Initial listTasks input used limit:"1" and failed numeric schema validation; model corrected it and then looked up both tasks and scheduled both for the same exact code-computed datetime. No incorrect reminder was created.
-- Time lost: ~1 min
-- Workaround: Retain strict schemas and the six-step limit; record the recovered retry. Both schedule results were verified before closing the browser.
-- Suggested fix (docs / API / error message): Improve numeric schema adherence and expose precise validation errors instead of generic UI errors.
-
 ## Native typing changes the reminder test phrase
 
 - Product: Tooling (browser automation)
@@ -234,51 +180,6 @@
 - Workaround: A tested pure helper rounds scheduled instants up to the next second while retaining the original requested remind_at in SQLite. Delivery is at most one second later and never early due to truncation.
 - Suggested fix (docs / API / error message): Document second-level schedule resolution or round future deadlines up instead of down.
 
-## Transient remote preview session failure
-
-- Product: Vite plugin | Wrangler
-- Expected: Local dev starts with the authenticated remote Workers AI binding.
-- Actual: First Phase 4 startup failed with “Could not create remote preview session on your account.” Authentication was still valid; a single retry started successfully without configuration changes.
-- Time lost: ~1 min
-- Workaround: Retry once and verify the existing login; no dashboard or resource changes.
-- Suggested fix (docs / API / error message): Include the underlying account/subdomain parse error and indicate whether a retry is appropriate.
-
-## Planner requests use string-valued days
-
-- Product: Workers AI
-- Expected: “plan my day” calls getCompletionStats with numeric days:30.
-- Actual: The low-history request passed immediately, but seeded requests initially used days:"30", failed strict validation, then corrected to numeric 30. Read-only calls made no data changes.
-- Time lost: ~1 min
-- Workaround: Keep strict validation and explicitly name all numeric tool fields in the system prompt. Record recovered schema retries rather than reporting a clean first attempt.
-- Suggested fix (docs / API / error message): Improve JSON numeric schema adherence and show precise tool validation errors.
-
-## Numeric tokens appear in two stream formats
-
-- Product: Workers AI | Agents SDK
-- Expected: Planner reply preserves corrected estimates 180 and 30 and total 210 exactly.
-- Actual: Seeded “plan my day” reply displayed 180180, 3030 and 210210 and a duplicated date. A temporary diagnostic confirmed native response fields can be numbers while the same token also appears as OpenAI text; prior normalization only removed string mirrors.
-- Time lost: ~2 min
-- Workaround: Prefer OpenAI text whenever a native response field is present, regardless of its type. Added regression coverage; rerun reply preserved all numbers and the date. Temporary diagnostic removed.
-- Suggested fix (docs / API / error message): Emit a single stream representation and keep response field types consistent; provider should avoid consuming both mirrors.
-
-## Preferred time windows already passed
-
-- Product: Workers AI
-- Expected: Evening “plan my day” uses observed morning/afternoon patterns as future-day preferences and proposes remaining work for today.
-- Actual: Initial seeded reply recommended deep work in the morning and admin in the afternoon despite the supplied current evening clock.
-- Time lost: ~1 min
-- Workaround: Add code-computed available buckets to planner output and a focused final-response system step after the plan tool. Past preferred windows are future-day preferences, not available slots today.
-- Suggested fix (docs / API / error message): Supply and enforce time-window availability alongside completion-pattern guidance.
-
-## Planner converts minutes to hours despite instructions
-
-- Product: Workers AI
-- Expected: “plan my day” copies corrected_est_minutes 180 and 30 and total_corrected_minutes 210 exactly as minutes.
-- Actual: After the numeric stream fix, another reply still rewrote durations as 3 hours and a 3.5-hour total, violating the no-arithmetic/no-conversion instruction.
-- Time lost: ~2 min
-- Workaround: A focused prepareStep override after proposeDayPlan limits the final response to verified plan data and exact minute labels; tools are disabled for that final summarization step.
-- Suggested fix (docs / API / error message): Improve numeric fidelity to tool outputs and support constrained final summaries without moving calculations to the model.
-
 ## Mixed static/dynamic tool results hide output types
 
 - Product: AI SDK
@@ -289,9 +190,56 @@
 - Suggested fix (docs / API / error message): Show typed prepareStep examples using staticToolResults when dynamic tool output is not relevant.
 
 ## Statistics-only request also produced a day plan
+
 - Product: Workers AI
 - Expected: “show completion stats for the last 30 days” returns a statistics summary only.
 - Actual: After one failed getCompletionStats attempt, the model recovered with numeric days=30, returned valid statistics, then unnecessarily called proposeDayPlan and narrated a plan. Explicit “plan my day” also recovered after one failed stats attempt and preserved the returned 30-minute task and total, morning preference and underestimation warning.
 - Time lost: ~2 min
 - Workaround: Phase 5-lite restricts recognized statistics-only turns to getCompletionStats, then disables tools for the final summary. This prevents the extra planner call for those requests; compile/tests pass, live model behavior not rechecked.
 - Suggested fix (docs / API / error message): Restrict planner availability for statistics-only requests and expose validation errors clearly.
+
+## Cloudflare local authentication and preview startup
+
+- Product: Workers AI | Wrangler | Vite plugin
+- Expected: Local dev starts with a usable Cloudflare login.
+- Actual: Separate incidents involved sandbox port 9229 denial, missing credentials, expired OAuth that could not refresh, and a transient “Could not create remote preview session on your account.” error despite valid authentication. Startup sometimes replaced the useful OAuth error with generic API-token guidance.
+- Time lost: ~4 min total across three incidents (~2 + ~1 + ~1).
+- Workaround: Authenticate interactively with wrangler login and verify whoami outside the sandbox. One retry resolved the preview failure without configuration changes. No resources or dashboard settings were changed.
+- Suggested fix (docs / API / error message): Document login prerequisites, preserve the underlying OAuth/preview error, and distinguish sandbox restrictions from account failures.
+
+## Dual-format SSE duplicates text, numbers and tool fragments
+
+- Product: Workers AI | Agents SDK
+- Expected: Text, numeric tokens and tool arguments appear once.
+- Actual: “Say hello in one short sentence.” yielded duplicated words and punctuation; a Qwen Paris trial also duplicated text and fragmented reasoning. “Set my timezone to Europe/Prague.” produced empty-argument calls because native and indexed OpenAI tool fragments were both consumed. Seeded “plan my day” displayed 180180, 3030, 210210 and duplicated date tokens; a probe showed native response fields can be numbers as well as strings.
+- Time lost: ~11 min across three incidents (~6 + ~3 + ~2).
+- Workaround: Prefer OpenAI text/tool representations when both exist, regardless of the native response type. Preserve metadata and UTF-8, keep regression coverage, cap turns at six steps, and remove diagnostic probes. Timezone and exact-number planner replies subsequently passed. Llama selection was authorized by the user.
+- Suggested fix (docs / API / error message): Provider should consume one representation and expose precise tool errors.
+
+## Numeric tool schema retries across task, reminder and planner requests
+
+- Product: Workers AI
+- Expected: Minute counts, list limits and days are JSON numbers.
+- Actual: “add write report due Friday 5pm, deep work, 2 hours” first sent est_minutes:"120"; after correction, exactly one task had the correct date, offset and kind. “Remind me about. reminderdelivery check in 2 minutes and about cancellation check in 2 minutes.” first sent limit:"1", then scheduled both at the code-computed datetime. Seeded “plan my day” sometimes sent days:"30" before correcting to 30; the low-history request passed immediately. No invalid writes occurred.
+- Time lost: ~3 min across these incidents (~1 each).
+- Workaround: Retain strict validation, explicit numeric instructions and six-step limit. Verified successful tool results and final data; record recovered retries honestly.
+- Suggested fix (docs / API / error message): Improve numeric schema adherence and show actionable validation errors instead of generic tool errors.
+
+## Planner narration needs exact numbers and available windows
+
+- Product: Workers AI
+- Expected: “plan my day” preserves corrected minutes and distinguishes historical preferences from today's remaining windows.
+- Actual: An evening seeded reply recommended morning deep work and afternoon admin despite the current clock. After stream normalization was fixed, another reply converted 180 minutes to 3 hours and 210 to 3.5 hours, violating the no-arithmetic rule.
+- Time lost: ~3 min across two incidents (~1 + ~2).
+- Workaround: Code supplies available buckets. A focused prepareStep system override after proposeDayPlan disables tools and requests exact minute labels, with passed windows described as future-day preferences. A subsequent live reply preserved 180/30/210 minutes and current evening availability.
+- Suggested fix (docs / API / error message): Improve fidelity to numeric tool outputs and provide constrained summaries with explicit time-window availability.
+
+## Worker-level Access does not support this app's WebSockets
+
+- Product: Access
+- Expected: Protecting the Worker directly in the dashboard can secure the app without changing chat transport.
+- Actual: Current official Workers Access documentation says Worker-level policies reject WebSocket upgrades with 403 and recommends hostname-based Access for real-time apps. This was found during documentation review, not a deployed failure.
+- Time lost: ~1 min
+- Workaround: README specifies a hostname-based self-hosted application and covering or disabling every alternate hostname. No dashboard settings were changed.
+- Suggested fix (docs / API / error message): Keep the WebSocket limitation prominent in dashboard setup and link directly to hostname-based setup.
+- Source: [Workers Access documentation](https://developers.cloudflare.com/workers/configuration/cloudflare-access/).
