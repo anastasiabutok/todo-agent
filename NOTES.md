@@ -1,6 +1,6 @@
 # SDK notes
 
-Verified against generated source and installed type definitions on Phase 0 (Phase 0).
+Verified against generated source and installed type definitions during Phase 0.
 
 - Agent: `AIChatAgent` from `@cloudflare/ai-chat`; generated `ChatAgent extends AIChatAgent<Env>`.
 - `onChatMessage(_onFinish: StreamTextOnFinishCallback<ToolSet>, _options?: OnChatMessageOptions): Promise<Response | undefined>`; starter uses `_onFinish: unknown`.
@@ -17,7 +17,7 @@ Verified against generated source and installed type definitions on Phase 0 (Pha
 - Starter dependencies: agents ^0.17.4; @cloudflare/ai-chat ^0.9.3; ai ^6.0.197; workers-ai-provider ^3.2.1.
 - Starter uses Kumo and Tailwind; preserve these.
 - `wrangler.jsonc`: AI binding `remote: true`, requires Cloudflare login even for local dev. No deployment performed.
-- Starter had no test script. Installed plain Vitest; test script uses vitest run with three compatibility regression tests, include test/\*_/_.test.ts.
+- Starter had no test script. Installed plain Vitest; test script uses vitest run with three compatibility regression tests, include `test/**/*.test.ts`.
 - Authenticated Workers AI inference returns error 5035: starter Kimi model requires paid Workers plan; user subsequently authorized switching to a Free-plan model.
 
 Environment: Node v24.13.0; npm 11.6.2.
