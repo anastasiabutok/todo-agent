@@ -243,3 +243,12 @@ Consolidated observations from Phases 0–6-lite. Related incidents are merged b
 - Workaround: README specifies a hostname-based self-hosted application and covering or disabling every alternate hostname. No dashboard settings were changed.
 - Suggested fix (docs / API / error message): Keep the WebSocket limitation prominent in dashboard setup and link directly to hostname-based setup.
 - Source: [Workers Access documentation](https://developers.cloudflare.com/workers/configuration/cloudflare-access/).
+
+## CI rejected the replacement spec's formatting
+
+- Product: Tooling (GitHub Actions / oxfmt)
+- Expected: The completed reduced-spec phases also pass the starter's Sanity Check workflow.
+- Actual: Run 41728959701 failed at oxfmt --check because the replacement SPEC.md had unformatted Markdown. The required reduced-phase typecheck and tests had passed, but those omit the formatting gate.
+- Time lost: ~2 min
+- Workaround: Format SPEC.md; keep its scope unchanged. Pin CI to Node 24, use npm ci and run npm test alongside npm run check. Local formatting, lint, typecheck and all 62 tests pass.
+- Suggested fix (docs / API / error message): Align phase completion checks with all repository CI gates.

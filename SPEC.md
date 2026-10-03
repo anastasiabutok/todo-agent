@@ -52,7 +52,7 @@ The user will only say something like "follow SPEC.md" or "continue". Everything
    1. the code the starter template generated (`src/server.ts`, `src/app.tsx` or equivalent),
    2. the type definitions in `node_modules/agents/` and `node_modules/ai/`,
    3. the docs at `https://developers.cloudflare.com/agents/llms.txt`.
-   If these disagree with this spec, **the code and types win**. Write the discrepancy into `FRICTION_LOG.md` (see §9).
+      If these disagree with this spec, **the code and types win**. Write the discrepancy into `FRICTION_LOG.md` (see §9).
 2. **Zod version:** check `package.json`. In Zod v3 use `z.string().datetime({ offset: true })`; in Zod v4 use `z.iso.datetime({ offset: true })`. Use whichever matches. Same for `z.string().date()` vs `z.iso.date()`.
 3. **Never** run `wrangler deploy`, create Cloudflare resources, or touch the Cloudflare dashboard. Ask the user to do it. Local dev (`npm run dev` / `wrangler dev`) is fine.
 4. **Never** commit secrets. `.dev.vars` must be in `.gitignore`.
@@ -60,23 +60,23 @@ The user will only say something like "follow SPEC.md" or "continue". Everything
 6. The LLM never does arithmetic, date maths, or ID generation. Code does. The LLM only decides which tool to call and writes text.
 7. Times: store as **unix ms UTC (INTEGER)**. IDs: `crypto.randomUUID()`. Tool inputs accept ISO 8601 strings **with offset**; convert in code.
 8. Keep the starter's styling system and component library. Don't add a new UI framework.
-10. **Git & GitHub:** in Phase 0, after scaffolding, `git init`, verify `.gitignore` contains `.dev.vars`, `.wrangler/`, `node_modules/`, `dist/`, then create a **private** repo with `gh repo create todo-agent --private --source=. --push` (if `gh` isn't installed or authenticated, stop and ask the user). Commit at the end of every phase with a message `phase N: <summary>` and push. Before every commit run `git diff --cached` and make sure no secrets, tokens, account IDs or emails are staged. Never force-push, never rewrite history. Don't make the repo public; the user does that.
-9. Definition of done for every phase: `npx tsc --noEmit` passes, `npm test` passes, `npm run dev` starts without errors, and the phase's acceptance criteria are manually verified (describe how you verified them).
+9. **Git & GitHub:** in Phase 0, after scaffolding, `git init`, verify `.gitignore` contains `.dev.vars`, `.wrangler/`, `node_modules/`, `dist/`, then create a **private** repo with `gh repo create todo-agent --private --source=. --push` (if `gh` isn't installed or authenticated, stop and ask the user). Commit at the end of every phase with a message `phase N: <summary>` and push. Before every commit run `git diff --cached` and make sure no secrets, tokens, account IDs or emails are staged. Never force-push, never rewrite history. Don't make the repo public; the user does that.
+10. Definition of done for every phase: `npx tsc --noEmit` passes, `npm test` passes, `npm run dev` starts without errors, and the phase's acceptance criteria are manually verified (describe how you verified them).
 
 ---
 
 ## 1. Stack
 
-| Concern | Choice |
-|---|---|
-| Runtime | Cloudflare Workers + Durable Objects (via Agents SDK) |
-| Agent base class | `AIChatAgent` from the starter (it persists chat messages and streams). Not the bare `Agent`. |
-| Storage | The agent's built-in SQLite (`this.sql`) for tasks; agent state (`this.setState`) for a small UI snapshot |
-| Model | Workers AI via `workers-ai-provider`, **using the model the starter is configured with**. Don't change it in phase 1–4. |
-| Scheduling | `this.schedule(...)` |
-| UI | The starter's React app (Vite), served as Workers static assets |
-| Auth | Cloudflare Access in front of the Worker; Worker verifies the Access JWT |
-| Tests | Vitest. Use `@cloudflare/vitest-pool-workers` only if the starter already has it; otherwise plain Vitest for `src/lib/` pure functions is enough |
+| Concern          | Choice                                                                                                                                           |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Runtime          | Cloudflare Workers + Durable Objects (via Agents SDK)                                                                                            |
+| Agent base class | `AIChatAgent` from the starter (it persists chat messages and streams). Not the bare `Agent`.                                                    |
+| Storage          | The agent's built-in SQLite (`this.sql`) for tasks; agent state (`this.setState`) for a small UI snapshot                                        |
+| Model            | Workers AI via `workers-ai-provider`, **using the model the starter is configured with**. Don't change it in phase 1–4.                          |
+| Scheduling       | `this.schedule(...)`                                                                                                                             |
+| UI               | The starter's React app (Vite), served as Workers static assets                                                                                  |
+| Auth             | Cloudflare Access in front of the Worker; Worker verifies the Access JWT                                                                         |
+| Tests            | Vitest. Use `@cloudflare/vitest-pool-workers` only if the starter already has it; otherwise plain Vitest for `src/lib/` pure functions is enough |
 
 ---
 
@@ -157,7 +157,7 @@ export const MIGRATIONS: string[] = [
     created_at INTEGER NOT NULL,
     read_at INTEGER
   );
-  `,
+  `
 ];
 ```
 
@@ -167,8 +167,8 @@ export const MIGRATIONS: string[] = [
 
 ```ts
 type AgentState = {
-  timezone: string;              // IANA, e.g. "Europe/Prague"; default "UTC"
-  openTasks: TaskView[];         // open tasks, sorted: overdue, then due_at asc, then priority
+  timezone: string; // IANA, e.g. "Europe/Prague"; default "UTC"
+  openTasks: TaskView[]; // open tasks, sorted: overdue, then due_at asc, then priority
   unreadNotifications: Notification[];
 };
 ```
@@ -192,6 +192,7 @@ After **every** mutation (any tool that writes, any schedule callback, marking n
 ## 5. Tools
 
 Define tools in `tools.ts` as `createTools(agent: TodoAgent)` and call it inside `onChatMessage`, so every `execute` closes over the real agent instance. **Do not** reference an undefined `agent` variable (the original sketch had that bug). Every tool:
+
 - validates input with Zod,
 - returns a small JSON object (never the whole DB),
 - on a "not found" or invalid state returns `{ ok: false, error: "<human readable>" }` instead of throwing,
@@ -199,21 +200,21 @@ Define tools in `tools.ts` as `createTools(agent: TodoAgent)` and call it inside
 
 Times in outputs are returned as **local ISO strings in the user's timezone** (via `lib/time.ts`) so the model reads them correctly.
 
-| Tool | Input | Behaviour |
-|---|---|---|
-| `listTasks` | `status: "open"\|"done"\|"all"` (default open), `due_before?: datetime`, `query?: string` (case-insensitive LIKE on title), `limit?: int 1..50` (default 20) | SELECT. Returns `{ tasks: [{id,title,status,priority,kind,owner,due_at_local,est_minutes,postponed_count,needs_attention}] }`. Description must say: *"Always call this first to find a task's id before changing a task the user refers to by name. If several tasks match, ask the user which one."* |
-| `addTask` | `title` (1..200 chars), `notes?`, `due_at?`, `priority?: 1..3`, `kind?: enum`, `est_minutes?: int 1..1440`, `parent_id?`, `owner?` | If `parent_id` given and doesn't exist → error. INSERT with `created_at = Date.now()`, `source='chat'`. Return `{ ok, id, title, due_at_local }`. |
-| `updateTask` | `id`, any of `title?`, `notes?`, `due_at?: datetime \| null`, `priority?`, `kind?`, `est_minutes?`, `owner?` | Only open tasks. Postpone logic via `lib/postpone.ts`: if old due_at is not null and new due_at is later → `postponed_count + 1`. Setting null or earlier doesn't change the count. If due_at changes and there are active reminders for the task, **do not** move them — return `{ reminder_note: "Task has a reminder at X; ask the user whether to move it." }`. |
-| `completeTask` | `id`, `actual_minutes?: int 1..1440` | Only from `open`. Set `status='done'`, `completed_at=Date.now()`. Cancel the task's unfired reminders (see §6). If `actual_minutes` missing, return `{ ok, ask_actual_minutes: true }`; the prompt tells the model to ask once, and if the user answers, call `logActualMinutes`. |
-| `logActualMinutes` | `id`, `actual_minutes` | Only for `done` tasks. UPDATE. |
-| `dropTask` | `id`, `reason?` | `status='dropped'`. Cancel reminders. Reversible. |
-| `reopenTask` | `id` | `done`/`dropped` → `open`, clear `completed_at`. |
-| `setReminder` | `task_id`, `remind_at: datetime` | Error if task not open or `remind_at` ≤ now. `const s = await agent.schedule(new Date(ms), "fireReminder", { reminderId })`. INSERT reminder with `schedule_id = s.id`. Return `{ ok, reminder_id, remind_at_local }`. |
-| `cancelReminder` | `reminder_id` | Cancel the schedule (verify the exact method name in the SDK), set `cancelled=1`. |
-| `getCompletionStats` | `days: int 7..365` (default 30) | See §7. |
-| `proposeDayPlan` | `date: date (YYYY-MM-DD, user's local date)` | See §7. |
-| `addTasksBatch` | `tasks: array (1..30) of { title, owner?, due_at?, kind?, est_minutes?, priority? }` | See §8. Single transaction if the SDK supports it; otherwise insert sequentially and report partial failures. `source='braindump'`. |
-| `setTimezone` | `timezone: string` | Validate with `Intl.DateTimeFormat(undefined, { timeZone })` in a try/catch. Store in state. |
+| Tool                 | Input                                                                                                                                                        | Behaviour                                                                                                                                                                                                                                                                                                                                                           |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `listTasks`          | `status: "open"\|"done"\|"all"` (default open), `due_before?: datetime`, `query?: string` (case-insensitive LIKE on title), `limit?: int 1..50` (default 20) | SELECT. Returns `{ tasks: [{id,title,status,priority,kind,owner,due_at_local,est_minutes,postponed_count,needs_attention}] }`. Description must say: _"Always call this first to find a task's id before changing a task the user refers to by name. If several tasks match, ask the user which one."_                                                              |
+| `addTask`            | `title` (1..200 chars), `notes?`, `due_at?`, `priority?: 1..3`, `kind?: enum`, `est_minutes?: int 1..1440`, `parent_id?`, `owner?`                           | If `parent_id` given and doesn't exist → error. INSERT with `created_at = Date.now()`, `source='chat'`. Return `{ ok, id, title, due_at_local }`.                                                                                                                                                                                                                   |
+| `updateTask`         | `id`, any of `title?`, `notes?`, `due_at?: datetime \| null`, `priority?`, `kind?`, `est_minutes?`, `owner?`                                                 | Only open tasks. Postpone logic via `lib/postpone.ts`: if old due_at is not null and new due_at is later → `postponed_count + 1`. Setting null or earlier doesn't change the count. If due_at changes and there are active reminders for the task, **do not** move them — return `{ reminder_note: "Task has a reminder at X; ask the user whether to move it." }`. |
+| `completeTask`       | `id`, `actual_minutes?: int 1..1440`                                                                                                                         | Only from `open`. Set `status='done'`, `completed_at=Date.now()`. Cancel the task's unfired reminders (see §6). If `actual_minutes` missing, return `{ ok, ask_actual_minutes: true }`; the prompt tells the model to ask once, and if the user answers, call `logActualMinutes`.                                                                                   |
+| `logActualMinutes`   | `id`, `actual_minutes`                                                                                                                                       | Only for `done` tasks. UPDATE.                                                                                                                                                                                                                                                                                                                                      |
+| `dropTask`           | `id`, `reason?`                                                                                                                                              | `status='dropped'`. Cancel reminders. Reversible.                                                                                                                                                                                                                                                                                                                   |
+| `reopenTask`         | `id`                                                                                                                                                         | `done`/`dropped` → `open`, clear `completed_at`.                                                                                                                                                                                                                                                                                                                    |
+| `setReminder`        | `task_id`, `remind_at: datetime`                                                                                                                             | Error if task not open or `remind_at` ≤ now. `const s = await agent.schedule(new Date(ms), "fireReminder", { reminderId })`. INSERT reminder with `schedule_id = s.id`. Return `{ ok, reminder_id, remind_at_local }`.                                                                                                                                              |
+| `cancelReminder`     | `reminder_id`                                                                                                                                                | Cancel the schedule (verify the exact method name in the SDK), set `cancelled=1`.                                                                                                                                                                                                                                                                                   |
+| `getCompletionStats` | `days: int 7..365` (default 30)                                                                                                                              | See §7.                                                                                                                                                                                                                                                                                                                                                             |
+| `proposeDayPlan`     | `date: date (YYYY-MM-DD, user's local date)`                                                                                                                 | See §7.                                                                                                                                                                                                                                                                                                                                                             |
+| `addTasksBatch`      | `tasks: array (1..30) of { title, owner?, due_at?, kind?, est_minutes?, priority? }`                                                                         | See §8. Single transaction if the SDK supports it; otherwise insert sequentially and report partial failures. `source='braindump'`.                                                                                                                                                                                                                                 |
+| `setTimezone`        | `timezone: string`                                                                                                                                           | Validate with `Intl.DateTimeFormat(undefined, { timeZone })` in a try/catch. Store in state.                                                                                                                                                                                                                                                                        |
 
 There is **no hard-delete tool**, and the UI has no delete either.
 
@@ -236,6 +237,7 @@ If the AI SDK version uses a human-in-the-loop/approval pattern in the starter (
 All maths in `src/lib/stats.ts` and `src/lib/plan.ts`, with unit tests.
 
 **`getCompletionStats({ days })`**
+
 - Query done tasks with `completed_at` in the last `days` days.
 - If fewer than **10** such tasks → return `{ enough_data: false, completed_count: n, message: "Not enough history yet (n/10 completed tasks)." }`.
 - Otherwise return:
@@ -245,6 +247,7 @@ All maths in `src/lib/stats.ts` and `src/lib/plan.ts`, with unit tests.
   - `underestimation_warning`: kinds whose median ratio ≥ 1.3.
 
 **`proposeDayPlan({ date })`**
+
 - Select open tasks owned by me (`owner IS NULL`) that are due on or before the end of that local date, plus open tasks with no due date and priority 1.
 - For each, `corrected_est_minutes = round(est_minutes × ratio[kind])`, ratio clamped to `[0.5, 3.0]`, default 1.0 if the kind has no ratio. If `est_minutes` is null, return null (don't invent).
 - Return tasks sorted by: overdue first, then priority, then due_at. Also return `total_corrected_minutes` and the best bucket per kind from stats (if enough data).
@@ -255,6 +258,7 @@ All maths in `src/lib/stats.ts` and `src/lib/plan.ts`, with unit tests.
 ## 8. Brain-dump to tasks
 
 Flow is enforced by the system prompt, not by code:
+
 1. User pastes a long text (heuristic in prompt: > ~300 characters, or the user says "brain dump"/"from these notes").
 2. Model extracts candidate tasks and shows them as a numbered list with title, owner, due date (or "no deadline").
 3. Model asks **only** about missing deadlines it thinks matter and genuinely unclear items. One message, not a questionnaire.
@@ -267,6 +271,7 @@ Code-level guard: `addTasksBatch` rejects batches > 30 and dedupes titles that e
 ## 9. System prompt (`prompt.ts`)
 
 Rebuild on every `onChatMessage` call. Include:
+
 - Current date-time as local ISO with offset, weekday name, and the IANA timezone. (Models resolve "Friday" badly without this.)
 - "Next Friday" etc.: resolve relative to the given date; if ambiguous, ask.
 - Rules: always `listTasks` before modifying a task by name; never invent ids; never do date maths beyond resolving the user's words into an ISO datetime with offset; keep replies short; after tool calls, confirm what changed in one sentence.
@@ -280,6 +285,7 @@ Rebuild on every `onChatMessage` call. Include:
 ## 10. UI
 
 Keep the starter's chat. Add:
+
 - `TaskPanel` (right side on desktop, tab on mobile): renders `state.openTasks` from `useAgent`'s state; overdue in red, `needsAttention` with a small badge, due dates shown in local time. Clicking a checkbox calls a `@callable()` `completeTaskFromUi(id)` that reuses the same code path as the tool. No other editing in the UI for now — editing happens through chat.
 - `NotificationBanner`: shows unread notifications, "dismiss" calls `markNotificationsRead`.
 - On first connect, send the browser timezone (`Intl.DateTimeFormat().resolvedOptions().timeZone`) via a `@callable()` `setTimezoneFromUi(tz)` if state.timezone is still the default.
@@ -292,40 +298,48 @@ Keep the starter's chat. Add:
 Each phase ends with: checks from §0.9 → commit → short report to the user → wait.
 
 **Phase 0 — Scaffold & verify assumptions**
+
 - `npm create cloudflare@latest -- todo-agent --template=cloudflare/agents-starter`, install, run `npm run dev`, confirm the demo chat works.
-- Read the generated server and client code. Write `NOTES.md` listing the *actual* names/signatures for: agent base class & import path, `onChatMessage` signature, how tools are passed to `streamText`, tool schema field name, `schedule` / cancel / list schedules, `setState`, `@callable`, `useAgent` & `useAgentChat` import paths, the Workers AI model id, Zod version.
+- Read the generated server and client code. Write `NOTES.md` listing the _actual_ names/signatures for: agent base class & import path, `onChatMessage` signature, how tools are passed to `streamText`, tool schema field name, `schedule` / cancel / list schedules, `setState`, `@callable`, `useAgent` & `useAgentChat` import paths, the Workers AI model id, Zod version.
 - Remove the demo tools (weather, calculate, starter scheduling tools) and their imports.
 - Create `FRICTION_LOG.md` with the template in §12.
 - ✅ Accept: app runs with no tools, chat still answers.
 
 **Phase 1 — Data layer + pure functions**
+
 - Migrations, queries, `lib/time.ts`, `lib/postpone.ts`, types.
 - Unit tests: time parsing with offsets incl. DST change in Europe/Prague (e.g. 2026-10-25), postpone logic (later / earlier / null → value / value → null).
 - ✅ Accept: tests pass; agent starts and `_meta.schema_version = 1` (verify via a temporary `@callable` debug method, then remove it).
 
 **Phase 2 — Core tools + system prompt**
+
 - `listTasks`, `addTask`, `updateTask`, `completeTask`, `logActualMinutes`, `dropTask`, `reopenTask`, `setTimezone`, `refreshState`.
 - ✅ Accept (manually in chat): "add write report due Friday 5pm, deep work, 2 hours" → task with correct local due date; "move the report to Monday" → listTasks then updateTask, postponed_count = 1; "done with the report, took 3 hours" → done, actual 180.
 
 **Phase 3 — Reminders + notifications + UI panel**
+
 - `setReminder`, `cancelReminder`, `fireReminder`, notifications, `TaskPanel`, `NotificationBanner`, callables.
 - ✅ Accept: "remind me about X in 2 minutes" → close tab → reopen after 3 minutes → banner shows reminder. Completing a task with a pending reminder → reminder never fires. Task list updates live when changed via chat.
 
 **Phase 4 — Planner**
+
 - `lib/stats.ts`, `lib/plan.ts` with tests (fewer than 10 → not enough data; median ratio; clamping; null estimates; timezone-correct hour bucketing).
 - Add a dev-only `@callable seedDemoData()` guarded by `DEV_AUTH_BYPASS === "true"` that inserts ~40 realistic completed tasks over the past 30 days (deep work mostly mornings, admin afternoons, deep tasks underestimated ~1.5×).
 - ✅ Accept: "plan my day" with seed data mentions mornings for deep work and warns about deep-work underestimation; without data it says there's not enough history.
 
 **Phase 5 — Brain-dump**
+
 - `addTasksBatch` + prompt flow.
 - ✅ Accept: paste a fake meeting transcript → numbered list → one clarifying message → confirm → tasks created with `source='braindump'`, owners set; nothing is created before confirmation.
 
 **Phase 6 — Auth + deploy prep**
+
 - `auth.ts`, server checks, instance-name check, env vars documented in README.
 - Write deployment steps for the user in README (create Access app, set vars, `wrangler deploy`). **Do not deploy.**
 - ✅ Accept: with bypass off and no JWT locally, agent routes return 403.
 
 **Phase 7 (optional) — AI Gateway**
+
 - Route Workers AI through AI Gateway (gateway id via env var). Document what you see in the gateway logs in FRICTION_LOG.md.
 
 ---
