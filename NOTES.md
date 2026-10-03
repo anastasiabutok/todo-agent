@@ -30,3 +30,14 @@ Environment: Node v24.13.0; npm 11.6.2.
 - Installed workers-ai-provider is 3.3.1 (starter ^3.2.1 range). Its getMappedStream emits both `response` and `choices[0].delta.content` when both are present, duplicating text. App adapter drops native text only when OpenAI text is present; keeps other metadata, passes nonstreaming results through. Tested with split transport chunks and UTF-8.
 - Qwen3 trial also duplicated text and fragmented reasoning; selected nonreasoning Llama model with compatibility adapter.
 - Project/repository root is todo-agent/. Tracking documents are also mirrored in the parent workspace for discovery.
+
+## Phase 1 — database and time APIs
+
+- `Agent.sql<T>(strings: TemplateStringsArray, ...values: (string | number | boolean | null)[]): T[]` is a tagged template. Installed implementation reduces interpolations to `?` placeholders and delegates to `this.ctx.storage.sql.exec(query, ...values)`.
+- Live local Durable Object verification: one migration string containing CREATE TABLE tasks, CREATE INDEX, CREATE TABLE reminders and CREATE TABLE notifications succeeds in a single this.sql call. No semicolon splitting needed. Dynamic DDL is application-owned; query values remain bound through tagged templates.
+- `this.ctx.storage.transactionSync<T>(closure: () => T): T` is available in generated Workers runtime types. Agent wraps `runMigrations(this.sql.bind(this))` in transactionSync during onStart, so DDL and schema version commit together.
+- Extracted ChatAgent to src/agent.ts; server.ts re-exports it, preserving Wrangler binding and client import. Existing MCP setup and chat kept.
+- Zod v4 `z.iso.datetime({ offset: true })` rejects missing offsets and invalid calendar dates; `z.iso.date()` validates local dates.
+- Time helpers accept explicit IANA timezone; day boundary search uses Intl calendar dates instead of assuming 24 hours. Tested Europe/Prague DST changes, skipped midnight, skipped date, offsets and millisecond roundtrips.
+- Node 24 builtin `node:sqlite` DatabaseSync provides real SQLite integration tests without another runtime dependency; Node emits an experimental warning. These complement the live Workers schema check.
+- Temporary @callable debugSchema returned schema_version “1” plus tasks/reminders/notifications. Removed afterward; live RPC now returns “Method debugSchema does not exist”.

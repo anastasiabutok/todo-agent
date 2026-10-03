@@ -116,3 +116,30 @@
 - Time lost: ~4 min
 - Workaround: Restart dev server on a fresh port and retry verification.
 - Suggested fix (docs / API / error message): Improve HMR recovery and surface initial message loading failures in the chat UI.
+
+## Multi-statement migration support confirmed
+
+- Product: Agents SDK | Durable Objects
+- Expected: Verify whether this.sql accepts a multi-statement migration before splitting statements.
+- Actual: Installed this.sql delegates to storage.sql.exec; live local migration creates all three tables and index in one call and stores schema_version=1.
+- Time lost: ~1 min
+- Workaround: No split needed; wrap migration and version update in storage.transactionSync.
+- Suggested fix (docs / API / error message): Document multiple-statement behavior and atomic migration examples next to the tagged SQL API.
+
+## Backslash escaping in tagged SQL
+
+- Product: Tooling (SQLite / JavaScript)
+- Expected: LIKE ESCAPE backslash is a single SQL escape character.
+- Actual: JavaScript template literal escaping removed the intended character; real SQLite tests failed with “ESCAPE expression must be a single character”.
+- Time lost: ~1 min
+- Workaround: Use ! as the explicit escape character; escape !, % and \_ in a tested pure helper, while binding the search pattern.
+- Suggested fix (docs / API / error message): Include a safe literal LIKE search example in SDK docs.
+
+## Builtin SQLite test runner warning
+
+- Product: Tooling (Node.js)
+- Expected: Run real SQLite integration tests using the installed Node runtime.
+- Actual: node:sqlite works on Node v24.13.0 but emits an ExperimentalWarning.
+- Time lost: ~0 min
+- Workaround: Keep the warning visible; verify actual Workers behavior separately with the temporary callable.
+- Suggested fix (docs / API / error message): Document Node runtime requirements and stability status for local SQLite tests.

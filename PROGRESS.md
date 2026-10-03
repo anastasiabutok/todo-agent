@@ -10,7 +10,11 @@
 
 ## Phase 1 — Data layer + pure functions
 
-- Status: not started
+- Status: done
+- Built: Task, Reminder, Notification, TaskView and AgentState types; versioned migration runner; typed task/reminder/notification SQL helpers. Agent extracted to src/agent.ts, migrations run atomically from onStart. Pure offset/timezone/day-boundary, postponement and literal search helpers with tests. No Phase 2 tools added.
+- Verification: npx tsc --noEmit passes. npm test passes 29 tests: DST parsing/formatting, Prague 23/25-hour days (including 2026-10-25), invalid dates/offsets, postpone later/earlier/equal/null transitions, SQL constraints, parameter binding, literal LIKE matching, repeated migration, future version rejection, transaction rollback and persisted notification state. npm run check verifies formatting, lint and types. Local npm run dev starts without errors at port 5175. Temporary @callable debugSchema over WebSocket returned schema_version=1 and all three tables; confirms multi-statement SQL. Removed method and verified live RPC rejects it afterward. Staged review, commit and push finalize this phase.
+- Open issues: Inherited Phase 0 audit findings and browser automation stalls remain. node:sqlite integration tests emit an experimental warning; live Workers verification passed. No deployment performed.
+- Next: Phase 2 — Core tools + system prompt (wait for user continuation).
 
 ## Phase 2 — Core tools + system prompt
 
