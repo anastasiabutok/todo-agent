@@ -179,3 +179,12 @@
 - Time lost: ~1 min
 - Workaround: Add a per-turn lookup guard that blocks mutation for any ID not returned by listTasks; test that the guard resets each turn. Strengthen numeric prompt and retain strict validation.
 - Suggested fix (docs / API / error message): Improve tool sequencing and schema adherence; show actual schema errors rather than generic errors.
+
+## Opaque internal errors in local dev logs
+
+- Product: Vite plugin | Durable Objects
+- Expected: Failed local requests include actionable errors and stack traces.
+- Actual: Final server log inspection showed three “Error: internal error; reference = …” lines without stack traces, alongside successful chat results and HMR updates. Root cause not established; browser automation had also stalled during this run.
+- Time lost: ~0 min
+- Workaround: Verified acceptance through visible tool outputs, read-only SQLite and synced WebSocket state. Recorded as an open issue rather than guessing the cause.
+- Suggested fix (docs / API / error message): Include request path and an actionable local stack trace for internal failures.
