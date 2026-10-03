@@ -2,6 +2,7 @@ import type { CompletionStats } from "./lib/stats";
 import { tool } from "ai";
 import type { ChatAgent } from "./agent";
 import {
+  batchInput,
   listInput,
   addInput,
   updateInput,
@@ -42,6 +43,12 @@ export function createTools(agent: ChatAgent) {
         "Add a task with an optional offset datetime, priority, kind, owner and estimate in minutes. Use only code-provided duration conversions.",
       inputSchema: addInput,
       execute: async (input) => agent.addTask(input)
+    }),
+    addTasksBatch: tool({
+      description:
+        "Create exactly the brain-dump candidates explicitly confirmed by the user, at most 30. Never call before confirmation. Inserts sequentially with source braindump; reports created tasks and partial failures. Retry only failed items, never successful ones.",
+      inputSchema: batchInput,
+      execute: async (input) => agent.addTasksBatch(input)
     }),
     updateTask: tool({
       description:
@@ -89,7 +96,7 @@ export function createTools(agent: ChatAgent) {
     }),
     getCompletionStats: tool({
       description:
-        "Get completion patterns and estimate ratios from history. ALWAYS call this before proposeDayPlan. If enough_data is false, do not claim patterns.",
+        "Get completion patterns and estimate ratios from history. For a statistics-only request, summarize this result without calling proposeDayPlan. When a day plan is requested, call this before proposeDayPlan. If enough_data is false, do not claim patterns.",
       inputSchema: statsInput,
       execute: async ({ days }) => {
         planningStats = agent.getCompletionStats(days);

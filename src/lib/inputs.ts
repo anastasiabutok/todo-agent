@@ -50,3 +50,20 @@ export const statsInput = z.object({
   days: z.number().int().min(7).max(365).default(30)
 });
 export const planInput = z.object({ date: z.iso.date() });
+
+export const batchInput = z.object({
+  tasks: z
+    .array(
+      addInput.pick({
+        title: true,
+        owner: true,
+        due_at: true,
+        kind: true,
+        est_minutes: true,
+        priority: true
+      })
+    )
+    .min(1)
+    .max(30)
+});
+export type BatchInput = z.infer<typeof batchInput>;

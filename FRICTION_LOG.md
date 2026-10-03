@@ -293,5 +293,5 @@
 - Expected: “show completion stats for the last 30 days” returns a statistics summary only.
 - Actual: After one failed getCompletionStats attempt, the model recovered with numeric days=30, returned valid statistics, then unnecessarily called proposeDayPlan and narrated a plan. Explicit “plan my day” also recovered after one failed stats attempt and preserved the returned 30-minute task and total, morning preference and underestimation warning.
 - Time lost: ~2 min
-- Workaround: Explicit planner request works; statistics-only narration remains a model/tool-selection limitation.
+- Workaround: Phase 5-lite restricts recognized statistics-only turns to getCompletionStats, then disables tools for the final summary. This prevents the extra planner call for those requests; compile/tests pass, live model behavior not rechecked.
 - Suggested fix (docs / API / error message): Restrict planner availability for statistics-only requests and expose validation errors clearly.
