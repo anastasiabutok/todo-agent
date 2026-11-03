@@ -1,12 +1,6 @@
 # Personal Todo Agent on Cloudflare
 
-**[Open the live demo](https://todo-agent.nasta-butok.workers.dev)**
-
 A single-user todo assistant for adding, editing, completing, delegating and postponing tasks through chat. It persists reminders and notifications, shows a live task panel, and proposes daily plans from completion history and corrected estimates. Brain dumps become tasks only after conversational confirmation.
-
-## Public application demo
-
-The current deployment is intentionally public for a Cloudflare application. All visitors share the default task list and chat instance, and inference uses the same Free allowance as local remote development. Use fictional demo data. Access instructions below are an optional private-deployment alternative; they have not been applied to the public demo.
 
 ## Demo
 
