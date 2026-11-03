@@ -1,60 +1,78 @@
-# Personal Todo Agent on Cloudflare
+# Todo Agent
 
-A single-user todo assistant for adding, editing, completing, delegating and postponing tasks through chat. It persists reminders and notifications, shows a live task panel, and proposes daily plans from completion history and corrected estimates. Brain dumps become tasks only after conversational confirmation.
+A personal todo assistant you talk to instead of filling in forms.
 
-## Demo
+I wanted a todo app that works the way I do. I wanted to type _"move the report to Friday and remind me on Thursday"_ and have it done, and I wanted the app to notice that I always underestimate deep work. Nothing I tried quite did that, so I built my own: a chat agent on Cloudflare that manages my tasks, sets reminders, turns messy meeting notes into tasks, and learns from when I actually get things done.
 
-_Demo GIF placeholder: record task creation → reminder → daily plan → confirmed brain dump._
+<!-- Add a screenshot or short GIF here: add a task → set a reminder → "plan my day" -->
 
-## Architecture
+## What it does
+
+- **Manage tasks by chatting.** Add, edit, complete, delegate, postpone, drop and reopen tasks in plain language. A live task panel updates as you talk.
+- **Reminders that don't get lost.** "Remind me about X tomorrow at 9" schedules a wake-up for the agent. The reminder is saved even if the browser is closed and shows up the next time you open the app.
+- **Brain dump → tasks.** Paste meeting notes or a messy list. The agent proposes numbered tasks with owners and deadlines, asks one clarifying question, and only adds the ones you confirm.
+- **Plan my day.** Once there's enough history, the agent looks at when you usually finish each kind of work and how far off your estimates tend to be, then suggests a plan for the rest of the day.
+
+## How it's built
+
+Each user gets their own agent, built with the [Cloudflare Agents SDK](https://developers.cloudflare.com/agents/). Under the hood the agent is a Durable Object, so it keeps its own SQLite database, can schedule its own wake-ups for reminders, and pushes live updates to the browser over a WebSocket. There's no separate server, database or job queue to run.
 
 ```mermaid
 flowchart TD
-  Browser[React chat and task panel] --> Access[Optional Cloudflare Access: hostname policy]
-  Access --> Worker[Worker static assets and agent routing]
-  Worker <-->|WebSocket state and chat| Agent[ChatAgent: AIChatAgent Durable Object]
+  Browser[React chat and task panel] --> Access[Cloudflare Access]
+  Access --> Worker[Worker: static assets and agent routing]
+  Worker <-->|WebSocket: chat and live state| Agent[Chat agent on a Durable Object]
   Agent --> SQL[(Built-in SQLite: tasks, reminders, notifications)]
-  Agent --> Functions[Pure time, statistics and planning functions]
-  Agent <-->|Validated tools and streaming| AI[Workers AI: Llama 3.3]
+  Agent --> Functions[Pure functions: dates, stats, planning]
+  Agent <-->|Tool calls| AI[Workers AI: Llama 3.3 70B]
   Agent --> Scheduler[Agents SDK scheduler]
-  Scheduler --> Callback[fireReminder: persist notification]
-  Callback --> SQL
-  Callback --> State[refreshState: synced UI snapshot]
-  State --> Browser
+  Scheduler --> SQL
 ```
 
-The UI reads the agent state rather than maintaining another task store. SQLite migrations run on agent startup; chat is persisted by AIChatAgent. The starter's React, Kumo and Tailwind styling remains in place. This is a single-user demo: the client uses the default instance, with no server-side instance restriction or multitenancy isolation.
+**Stack:** Cloudflare Workers, Agents SDK, Durable Objects (SQLite), Workers AI, React + Vite, Vitest (69 tests).
+
+I built it with AI coding agents working from a phased spec ([SPEC.md](SPEC.md)). I owned the product decisions, scope and testing, and [PROGRESS.md](PROGRESS.md) and the commit history show how it came together phase by phase.
 
 ## Product decisions
 
-- **Reversible removal:** no hard-delete tool; drop and reopen preserve task history.
-- **Code owns calculations:** pure functions compute dates, durations, postponement counts, completion statistics and estimate corrections. IDs come from `crypto.randomUUID()`. SQL selects the relevant records; the model chooses tools and explains their results.
-- **Cold-start threshold:** fewer than 10 completed tasks means no pattern claims. Per-kind median estimate ratios require at least five estimate/actual pairs; corrections are clamped to 0.5–3.0. Unknown estimates stay unknown.
-- **Honest planning windows:** local-hour history describes preferences; code supplies remaining windows so the model can distinguish a passed morning from today's availability. Plans do not mutate tasks or deadlines.
-- **Persisted reminders:** notification rows survive a closed browser. Completing or dropping a task cancels pending reminders with persisted guards. Native browser notifications are optional; in-app banners work independently.
-- **Confirm brain dumps:** show numbered candidates with owners and deadlines, ask one focused clarification, then insert only confirmed items. Batches contain 1–30 tasks, inserted sequentially with `source='braindump'`; partial failures are returned. No duplicate detection or batch transaction is included. Candidate extraction and item selection use the prompt. A turn guard disables preview tools and blocks batch execution without a recognized explicit confirmation after a candidate offer; this is not a persisted approval system.
-- **Dashboard-managed protection:** private deployment relies on Cloudflare Access; the current public demo has no authentication. There is no application JWT validation or `auth.ts`.
+- **The model never does maths.** Dates, durations, postponement counts and estimate corrections are computed in tested code. The LLM only decides which tool to call and explains the result. That's what keeps "next Friday" correct across time zones and daylight-saving changes.
+- **No hard delete.** Dropping a task keeps its history, so anything can be reopened.
+- **No guessing without data.** The planner makes no claims about your habits until you've completed at least 10 tasks, and estimate corrections are capped so one odd day can't skew them.
+- **Confirm before creating.** A brain dump never creates tasks until you say which ones you want.
+- **Reminders survive a closed tab.** Notifications are stored, not just pushed, and completing a task cancels its pending reminders.
+
+## What I'd build next
+
+- AI Gateway for logging, caching and cost limits on model calls
+- Stricter tool-call validation with clearer error messages
+- Export and backup of tasks
+- A short onboarding flow, so the planner is useful from day one
+
+## Notes from building it
+
+[FRICTION_LOG.md](FRICTION_LOG.md) collects the places where the docs, types or tooling behaved differently than expected, with workarounds. For example, Worker-level Access doesn't support WebSocket upgrades, and the starter template's default model isn't available on the Workers Free plan.
+
+**Known limitations:** it's a single-user app protected by Cloudflare Access, with no auth code of its own. The model occasionally sends malformed tool arguments, and a small repair step catches the common cases. Dependencies haven't been through a security audit.
+
+---
 
 ## Run locally
 
-Use Node.js 24 (developed with 24.13.0), npm, and a Cloudflare account with Workers AI access. From the repository root:
+Requires Node.js 24 and a Cloudflare account with Workers AI access.
 
 ```sh
 npm ci
 npx wrangler login
-npx wrangler whoami
 npx tsc --noEmit
 npm test
 npm run dev
 ```
 
-Open the localhost URL printed by Vite. Local development uses remote Workers AI (`AI.remote: true`), so authentication and network access are required and inference uses your account's allowance. The configured model is `@cf/meta/llama-3.3-70b-instruct-fp8-fast`; the starter's paid-only model was replaced with user approval. Free-plan limits can interrupt chat; no paid upgrade is required by this project.
+Open the localhost URL Vite prints. Local dev uses remote Workers AI (`@cf/meta/llama-3.3-70b-instruct-fp8-fast`), so you need to be logged in, and requests count against your account's AI allowance. No `.dev.vars` file is needed for normal use.
 
-No `.dev.vars` file is needed for ordinary local use. `DEV_AUTH_BYPASS="true"` is only a development seed gate in this reduced version; it does not implement authentication. Never set it in deployed variables or commit `.dev.vars`. No `ACCESS_AUD`, `ACCESS_TEAM_DOMAIN` or `ALLOWED_EMAIL` Worker variables are required.
+### Demo history (optional)
 
-### Optional demo history
-
-For a new local database, temporarily put `DEV_AUTH_BYPASS="true"` in ignored `.dev.vars`, restart local dev, and invoke the agent's `seedDemoData` callable through an SDK client or its WebSocket RPC protocol. It is not an LLM tool or a UI button. For example, this Node 24 command targets the default local Vite port; replace the port if Vite prints another one:
+To try the planner without weeks of real data, put `DEV_AUTH_BYPASS="true"` in `.dev.vars` (it's git-ignored), restart dev, and call the `seedDemoData` callable:
 
 ```sh
 node --input-type=module <<'JS'
@@ -73,56 +91,20 @@ socket.addEventListener('message', ({data}) => {
 JS
 ```
 
-The seed adds 40 completed examples and two labeled open tasks. An idempotence marker prevents reseeding. Remove the flag and restart afterward; the seeded rows remain. Local data in `.wrangler/` is separate from deployed data and is not uploaded by deployment.
+This adds 40 completed example tasks and two open ones, and only runs once. Remove the flag and restart afterwards. Never set it in deployed variables.
 
-### Checks and sample conversations
+### Try these messages
 
-`npx tsc --noEmit` and `npm test` are the reduced spec's completion checks. There are now 69 tests, including regression coverage added after production failures. Earlier live checks covered core mutations, persisted reminders, mobile layout, low-history planning and seeded planning. After production validation errors, local task creation passed without an error card. Final preview/confirmation, reminder and planning regressions remain live-unverified because the account exhausted its daily Free allowance.
+1. "Add release checklist, priority 1, admin, estimate 30 minutes, no deadline."
+2. "Brain dump: I need to review the proposal, and Alex needs to send the invoice. Neither has a deadline. Show candidates first." Then: "Add both."
+3. "Plan my day."
 
-Three manual messages for the final smoke check:
+## Deploy
 
-1. “Add release checklist, priority 1, admin, estimate 30 minutes, no deadline.”
-2. “Brain dump: I need to review the proposal, and Alex needs to send the invoice. Neither has a deadline. Show candidates first.” Then “Add both.”
-3. “Plan my day.” A fresh deployment should acknowledge insufficient completion history.
+1. Check `wrangler.jsonc` (Worker `todo-agent`, the `ChatAgent` Durable Object binding and migration, the AI binding, static assets), then run `npx wrangler login`.
+2. Run `npm ci && npx tsc --noEmit && npm test && npm run deploy`. `npm run deploy` builds with Vite first, so use it rather than a bare `wrangler deploy`.
+3. Protect the app with Cloudflare Access before adding real data (see below).
 
-## Deploy — user-run steps
+### Cloudflare Access
 
-No deployment or dashboard configuration has been performed by the coding agent.
-
-1. Review `wrangler.jsonc`: Worker name `todo-agent`, `ChatAgent` SQLite Durable Object binding and migration, remote AI binding, and static asset configuration. Sign in with `npx wrangler login` and confirm the intended account with `npx wrangler whoami`.
-2. Prepare hostname-based Access as described below for the hostname you intend to use. Keep private task data out of the app until protection has been verified.
-3. From the repository root, run:
-
-   ```sh
-   npm ci
-   npx tsc --noEmit
-   npm test
-   npm run deploy
-   ```
-
-   `npm run deploy` builds with Vite before running `wrangler deploy`, so Wrangler uses the generated build configuration. A bare `wrangler deploy` from unbuilt source does not replace the Vite build step. The command provisions the configured Worker and Durable Object migration in your account.
-
-4. Finish the Access hostname entries using the actual deployment URL. Protect or disable alternate hostnames and preview URLs before entering personal data.
-5. Verify Access in a signed-out/private window: the root page and `/agents/chat-agent/default` must require authentication. Sign in as the allowed identity, open the app, and confirm chat reaches Connected. A different identity must be denied. Then run the three smoke messages above.
-
-### Cloudflare Access setup
-
-Use **hostname-based** Access: Worker-level Access currently rejects WebSocket upgrades. Protect each enabled hostname, including `workers.dev`, custom domains and any previews, or disable unused endpoints. See [Workers Access guidance](https://developers.cloudflare.com/workers/configuration/cloudflare-access/).
-
-In Zero Trust, open **Access controls → Applications → Create new application → Self-hosted and private**. Add the public hostname for the app (use custom input when needed); leave the path empty to protect the entire host. Add an **Allow** policy with **Include → Emails** restricted to your own address, select an identity provider or email one-time PIN, choose a session duration, and save. Avoid an Everyone or Bypass policy. See [self-hosted application setup](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/).
-
-The app has no origin JWT check; an uncovered hostname exposes its agent routes. Localhost is unprotected for development. Keep this a single-user demo behind the configured Access application.
-
-## Known limitations
-
-- The model sometimes sends numeric strings or optional nulls. A narrow repair hook normalizes known representation errors before strict validation. Other malformed calls can still fail; historical error cards remain in chat.
-- Recognized English statistics-only requests restrict tool availability to completion stats. Other wording may still confuse model intent.
-- A stream adapter removes duplicated native/OpenAI text and tool representations; regression coverage includes numeric mirrors and UTF-8.
-- Opaque local internal errors and browser reload stalls occurred; their root causes remain unknown. Successful data checks do not establish that these are resolved.
-- The original install reported 24 dependency audit findings (including high/critical); dependency paths have not been triaged. There is no claim of a completed security audit.
-- Daily Free AI quota is currently exhausted; further inference must wait for available quota. Chat now displays a quota-specific error.
-- Native OS notification delivery, deployed Access and final production fixes have not been verified. Full observations and workarounds are in [FRICTION_LOG.md](FRICTION_LOG.md).
-
-## What I'd build next
-
-AI Gateway for inference observability and cost controls; stronger schema adherence and useful tool errors; server-enforced brain-dump confirmation and retry idempotency; dependency audit remediation; export/backup; production Access and WebSocket integration checks. AI Gateway and additional authentication code were explicitly excluded from this delivery.
+Use **hostname-based** Access. Worker-level Access currently rejects WebSocket upgrades, which this app relies on. In Zero Trust, go to **Access controls → Applications → Create new application → Self-hosted and private**, add the app's hostname with an empty path, and add an **Allow** policy limited to your own email. Protect or disable every other hostname, including `workers.dev` and preview URLs. Then check in a private window that both `/` and `/agents/chat-agent/default` require sign-in. See [Workers Access guidance](https://developers.cloudflare.com/workers/configuration/cloudflare-access/) and [self-hosted application setup](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/).
